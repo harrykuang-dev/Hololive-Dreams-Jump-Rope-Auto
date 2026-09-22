@@ -16,7 +16,7 @@ class App(tk.Tk):
         panel = ttk.Frame(self, padding=20)
         panel.pack(fill="both", expand=True)
         ttk.Label(panel, text="Hololive Dreams 跳繩自動遊玩", font=("", 16, "bold")).pack()
-        ttk.Label(panel, text="先在遊戲中選好難度並按「遊玩」，看到倒數後再啟動。\n程式會把遊戲切到前景並持續短按 Space。", justify="center").pack(pady=(12, 10))
+        ttk.Label(panel, text="先在遊戲中選好難度並按「遊玩」，看到倒數後再啟動。\n程式會辨識繩子掃到腳部區域，再點擊 Jump。", justify="center").pack(pady=(12, 10))
         row = ttk.Frame(panel)
         row.pack()
         ttk.Label(row, text="連跳間隔（秒）").pack(side="left")
@@ -78,4 +78,3 @@ class App(tk.Tk):
 
 if __name__ == "__main__":
     App().mainloop()
-
