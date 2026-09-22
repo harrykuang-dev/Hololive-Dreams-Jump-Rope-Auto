@@ -10,18 +10,16 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Hololive Dreams 跳繩自動遊玩")
-        self.geometry("430x245")
+        self.geometry("450x285")
         self.resizable(False, False)
         self.bot: JumpRopeBot | None = None
         panel = ttk.Frame(self, padding=20)
         panel.pack(fill="both", expand=True)
         ttk.Label(panel, text="Hololive Dreams 跳繩自動遊玩", font=("", 16, "bold")).pack()
-        ttk.Label(panel, text="先在遊戲中選好難度並按「遊玩」，看到倒數後再啟動。\n程式會辨識繩子掃到腳部區域，再點擊 Jump。", justify="center").pack(pady=(12, 10))
-        row = ttk.Frame(panel)
-        row.pack()
-        ttk.Label(row, text="連跳間隔（秒）").pack(side="left")
-        self.interval = tk.StringVar(value="0.045")
-        ttk.Entry(row, width=8, textvariable=self.interval).pack(side="left", padx=8)
+        ttk.Label(panel, text="預設只觀察繩子；100 下尚未驗證。\n辨識完整繩形及最低處的回升，不按固定節奏。", justify="center").pack(pady=(12, 10))
+        self.play_enabled = tk.BooleanVar(value=False)
+        ttk.Checkbutton(panel, text="啟用實驗性單局輸入（可能漏判）", variable=self.play_enabled).pack()
+        ttk.Label(panel, text="只執行本局；結算或失去焦點後停止。F9 可全域停止。").pack()
         buttons = ttk.Frame(panel)
         buttons.pack(pady=15)
         self.start_button = ttk.Button(buttons, text="啟動（F8）", command=self.start_bot)
@@ -38,7 +36,7 @@ class App(tk.Tk):
         if self.bot and self.bot.running:
             return
         try:
-            config = BotConfig(tap_interval=float(self.interval.get()))
+            config = BotConfig(observe_only=not self.play_enabled.get())
             config.validate()
             self.bot = JumpRopeBot(config)
             self.bot.find_game()
@@ -52,7 +50,7 @@ class App(tk.Tk):
 
     def monitor_bot(self) -> None:
         if self.bot and self.bot.running:
-            self.status.set(f"執行中：已送出 {self.bot.tap_count} 次輸入（F9 停止）")
+            self.status.set(f"候選訊號 {self.bot.candidate_count}；輸入 {self.bot.tap_count}（非分數）")
             self.after(250, self.monitor_bot)
         elif self.stop_button["state"] != "disabled":
             if self.bot and self.bot.last_error:

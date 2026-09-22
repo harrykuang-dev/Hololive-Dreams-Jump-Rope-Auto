@@ -13,8 +13,10 @@ from typing import Callable
 import win32api
 import win32con
 import win32gui
+import win32process
 
-from vision import GameCapture, RopeDetector, RopeTimingEstimator
+from vision import GameCapture, RoundGate
+from rope_track import VisualPassDetector
 
 LOG = logging.getLogger("jump-rope-auto")
 
@@ -27,39 +29,16 @@ class GameNotFoundError(RuntimeError):
 class BotConfig:
     window_title: str = "hololive-Dreams"
     window_class: str = "UnityWndClass"
-    # Only used by the retained rapid diagnostic strategy.
-    tap_interval: float = 0.045
-    # Keep the key down longer than a 60 Hz frame so Unity cannot miss it.
     key_down_time: float = 0.025
-    refocus_interval: float = 1.0
-    jump_x_ratio: float = 0.92
-    jump_y_ratio: float = 0.91
-    acceleration_per_jump: float = 0.0
-    minimum_interval: float = 0.02
-    startup_delay: float = 0.0
-    strategy: str = "vision"
+    observe_only: bool = True
 
     def validate(self) -> None:
-        if not 0.02 <= self.tap_interval <= 2.0:
-            raise ValueError("tap_interval must be between 0.02 and 2.0 seconds")
-        if not 0.001 <= self.key_down_time < self.tap_interval:
-            raise ValueError("key_down_time must be positive and shorter than tap_interval")
-        if self.strategy not in {"vision", "rapid"}:
-            raise ValueError("strategy must be vision or rapid")
-        if self.minimum_interval <= 0 or self.minimum_interval > self.tap_interval:
-            raise ValueError("minimum_interval must be positive and no greater than tap_interval")
-        if self.acceleration_per_jump < 0 or self.startup_delay < 0:
-            raise ValueError("acceleration_per_jump and startup_delay cannot be negative")
-
-    def interval_for_jump(self, jump_number: int) -> float:
-        """Return the delay after a sent jump input."""
-        if self.strategy in {"rapid", "vision"}:
-            return self.tap_interval
-        return max(self.minimum_interval, self.tap_interval - jump_number * self.acceleration_per_jump)
+        if not 0.001 <= self.key_down_time <= 0.05:
+            raise ValueError("key_down_time must be between 0.001 and 0.05 seconds")
 
 
 class JumpRopeBot:
-    """Keeps the player airborne by tapping Space whenever the game can accept it."""
+    """Single-round visual controller; never advances menus or retries a round."""
 
     def __init__(self, config: BotConfig | None = None, *,
                  clock: Callable[[], float] = time.perf_counter,
@@ -73,6 +52,7 @@ class JumpRopeBot:
         self._thread: threading.Thread | None = None
         self._hwnd: int | None = None
         self.tap_count = 0
+        self.candidate_count = 0
         self.last_error: Exception | None = None
         self.last_detector_score = 0.0
 
@@ -101,59 +81,89 @@ class JumpRopeBot:
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             self._sleep(0.15)
         self._allow_foreground_switch()
+        foreground = win32gui.GetForegroundWindow()
+        current_thread = win32api.GetCurrentThreadId()
+        target_thread, _ = win32process.GetWindowThreadProcessId(hwnd)
+        foreground_thread, _ = win32process.GetWindowThreadProcessId(foreground)
+        attached: list[int] = []
         try:
+            for thread_id in {target_thread, foreground_thread} - {current_thread}:
+                win32process.AttachThreadInput(current_thread, thread_id, True)
+                attached.append(thread_id)
+            win32gui.BringWindowToTop(hwnd)
             win32gui.SetForegroundWindow(hwnd)
+            win32gui.SetFocus(hwnd)
         except Exception as error:
             raise RuntimeError("無法將遊戲切到前景；請手動點一下遊戲視窗後重試。") from error
+        finally:
+            for thread_id in attached:
+                win32process.AttachThreadInput(current_thread, thread_id, False)
         self._hwnd = hwnd
         return hwnd
 
-    def tap_jump(self) -> None:
+    def tap_jump(self, frame) -> bool:
         """Click the game's own Jump button, which Unity accepts reliably."""
+        if self.config.observe_only:
+            return False
         if not self._hwnd:
             raise GameNotFoundError("遊戲視窗已關閉。")
+        if self._stop.is_set() or win32gui.GetForegroundWindow() != self._hwnd:
+            self.stop()
+            return False
+        if not RoundGate.gameplay_visible(frame):
+            self.stop()
+            return False
+        point = RoundGate.jump_position(frame)
+        if point is None:
+            self.stop()
+            return False
         left, top, right, bottom = win32gui.GetClientRect(self._hwnd)
-        client_x = round((right - left) * self.config.jump_x_ratio)
-        client_y = round((bottom - top) * self.config.jump_y_ratio)
+        client_x = round((right - left) * point[0])
+        client_y = round((bottom - top) * point[1])
         screen_x, screen_y = win32gui.ClientToScreen(self._hwnd, (client_x, client_y))
         win32api.SetCursorPos((screen_x, screen_y))
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
-        self._sleep(self.config.key_down_time)
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+        try:
+            self._sleep(self.config.key_down_time)
+        finally:
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+        return True
 
     def _loop(self) -> None:
         self._running.set()
         self.tap_count = 0
+        self.candidate_count = 0
         self.last_error = None
-        next_tap = self._clock() + self.config.startup_delay
-        next_focus_check = next_tap
         try:
             self.focus_game()
-            detector = RopeDetector()
-            timing = RopeTimingEstimator()
+            detector = VisualPassDetector()
+            gate = RoundGate()
             capture = GameCapture(self._hwnd)
             while not self._stop.is_set():
+                if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
+                    break
+                if win32gui.GetForegroundWindow() != self._hwnd:
+                    LOG.info("遊戲失去焦點，停止輸入")
+                    break
+                frame = capture.grab()
                 now = self._clock()
-                if now >= next_focus_check:
-                    if not self._hwnd or not win32gui.IsWindow(self._hwnd):
-                        raise GameNotFoundError("遊戲視窗已關閉。")
-                    if win32gui.GetForegroundWindow() != self._hwnd:
-                        LOG.warning("遊戲失去焦點，正在重新取得焦點")
-                        self.focus_game()
-                    next_focus_check = now + self.config.refocus_interval
-                if self.config.strategy == "vision":
-                    frame = capture.grab()
-                    if timing.should_jump(detector.observe(frame, now), now):
-                        self.tap_jump()
-                        self.tap_count += 1
-                    self.last_detector_score = detector.last_score
-                    self._sleep(0.012)
-                elif now >= next_tap:
-                    self.tap_jump()
-                    self.tap_count += 1
-                    next_tap = max(next_tap + self.config.interval_for_jump(self.tap_count - 1), self._clock())
-                else:
-                    self._sleep(min(next_tap - now, 0.005))
+                allowed = gate.observe(frame)
+                if gate.finished:
+                    LOG.info("本局結束或畫面無法確認，已停止；不會點擊下一步")
+                    break
+                if not allowed:
+                    self._sleep(0.02)
+                    continue
+                if detector.observe(frame, now):
+                    self.candidate_count += 1
+                    if not self.config.observe_only:
+                        fresh = capture.grab()
+                        if not gate.observe(fresh):
+                            break
+                        if self.tap_jump(fresh):
+                            self.tap_count += 1
+                self.last_detector_score = detector.last_score
+                self._sleep(0.012)
         except Exception as error:
             self.last_error = error
             LOG.exception("自動跳繩已停止")
@@ -197,20 +207,14 @@ class JumpRopeBot:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Hololive Dreams 跳繩自動遊玩程式")
-    parser.add_argument("--interval", type=float, default=0.045, help="舊版連點間隔（秒）")
-    parser.add_argument("--startup-delay", type=float, default=0, help="開始跳躍前的等待秒數")
-    parser.add_argument("--rapid", action="store_true", help="使用舊版連點診斷模式；預設為視覺辨識")
     parser.add_argument("--duration", type=float, help="測試秒數；省略則持續執行")
+    parser.add_argument("--play", action="store_true", help="開啟實驗性單局輸入（未驗證100下）；預設只觀察")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    bot = JumpRopeBot(BotConfig(
-        tap_interval=args.interval,
-        startup_delay=args.startup_delay,
-        minimum_interval=0.02,
-        strategy="rapid" if args.rapid else "vision",
-    ))
+    bot = JumpRopeBot(BotConfig(observe_only=not args.play))
     try:
-        print("開始自動跳繩；按 Ctrl+C 停止。")
+        print("實驗性單局輸入" if args.play else "只觀察，不輸入")
+        print("按 F9 或 Ctrl+C 停止。")
         bot.run(args.duration)
     except KeyboardInterrupt:
         bot.stop()
