@@ -14,6 +14,8 @@ import win32api
 import win32con
 import win32gui
 
+from vision import GameCapture, RopeDetector, RopeTimingEstimator
+
 LOG = logging.getLogger("jump-rope-auto")
 
 
@@ -25,18 +27,35 @@ class GameNotFoundError(RuntimeError):
 class BotConfig:
     window_title: str = "hololive-Dreams"
     window_class: str = "UnityWndClass"
+    # Only used by the retained rapid diagnostic strategy.
     tap_interval: float = 0.045
     # Keep the key down longer than a 60 Hz frame so Unity cannot miss it.
     key_down_time: float = 0.025
     refocus_interval: float = 1.0
     jump_x_ratio: float = 0.92
     jump_y_ratio: float = 0.91
+    acceleration_per_jump: float = 0.0
+    minimum_interval: float = 0.02
+    startup_delay: float = 0.0
+    strategy: str = "vision"
 
     def validate(self) -> None:
-        if not 0.02 <= self.tap_interval <= 0.5:
-            raise ValueError("tap_interval must be between 0.02 and 0.5 seconds")
+        if not 0.02 <= self.tap_interval <= 2.0:
+            raise ValueError("tap_interval must be between 0.02 and 2.0 seconds")
         if not 0.001 <= self.key_down_time < self.tap_interval:
             raise ValueError("key_down_time must be positive and shorter than tap_interval")
+        if self.strategy not in {"vision", "rapid"}:
+            raise ValueError("strategy must be vision or rapid")
+        if self.minimum_interval <= 0 or self.minimum_interval > self.tap_interval:
+            raise ValueError("minimum_interval must be positive and no greater than tap_interval")
+        if self.acceleration_per_jump < 0 or self.startup_delay < 0:
+            raise ValueError("acceleration_per_jump and startup_delay cannot be negative")
+
+    def interval_for_jump(self, jump_number: int) -> float:
+        """Return the delay after a sent jump input."""
+        if self.strategy in {"rapid", "vision"}:
+            return self.tap_interval
+        return max(self.minimum_interval, self.tap_interval - jump_number * self.acceleration_per_jump)
 
 
 class JumpRopeBot:
@@ -55,6 +74,7 @@ class JumpRopeBot:
         self._hwnd: int | None = None
         self.tap_count = 0
         self.last_error: Exception | None = None
+        self.last_detector_score = 0.0
 
     @property
     def running(self) -> bool:
@@ -105,10 +125,13 @@ class JumpRopeBot:
         self._running.set()
         self.tap_count = 0
         self.last_error = None
-        next_tap = self._clock()
+        next_tap = self._clock() + self.config.startup_delay
         next_focus_check = next_tap
         try:
             self.focus_game()
+            detector = RopeDetector()
+            timing = RopeTimingEstimator()
+            capture = GameCapture(self._hwnd)
             while not self._stop.is_set():
                 now = self._clock()
                 if now >= next_focus_check:
@@ -118,10 +141,17 @@ class JumpRopeBot:
                         LOG.warning("遊戲失去焦點，正在重新取得焦點")
                         self.focus_game()
                     next_focus_check = now + self.config.refocus_interval
-                if now >= next_tap:
+                if self.config.strategy == "vision":
+                    frame = capture.grab()
+                    if timing.should_jump(detector.observe(frame, now), now):
+                        self.tap_jump()
+                        self.tap_count += 1
+                    self.last_detector_score = detector.last_score
+                    self._sleep(0.012)
+                elif now >= next_tap:
                     self.tap_jump()
                     self.tap_count += 1
-                    next_tap = max(next_tap + self.config.tap_interval, self._clock())
+                    next_tap = max(next_tap + self.config.interval_for_jump(self.tap_count - 1), self._clock())
                 else:
                     self._sleep(min(next_tap - now, 0.005))
         except Exception as error:
@@ -167,11 +197,18 @@ class JumpRopeBot:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Hololive Dreams 跳繩自動遊玩程式")
-    parser.add_argument("--interval", type=float, default=0.045, help="每次按 Space 的秒數")
+    parser.add_argument("--interval", type=float, default=0.045, help="舊版連點間隔（秒）")
+    parser.add_argument("--startup-delay", type=float, default=0, help="開始跳躍前的等待秒數")
+    parser.add_argument("--rapid", action="store_true", help="使用舊版連點診斷模式；預設為視覺辨識")
     parser.add_argument("--duration", type=float, help="測試秒數；省略則持續執行")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    bot = JumpRopeBot(BotConfig(tap_interval=args.interval))
+    bot = JumpRopeBot(BotConfig(
+        tap_interval=args.interval,
+        startup_delay=args.startup_delay,
+        minimum_interval=0.02,
+        strategy="rapid" if args.rapid else "vision",
+    ))
     try:
         print("開始自動跳繩；按 Ctrl+C 停止。")
         bot.run(args.duration)
