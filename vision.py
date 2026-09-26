@@ -241,4 +241,3 @@ class RoundGate:
         if self._confirmations >= 3:
             self.active = True
         return self.active
-
