@@ -2,7 +2,7 @@
 
 Fits the visible rope between its two holders, then measures its motion.
 Outputs are unverified candidate events; the controller independently gates
-input and defaults to observation only.
+input to a confirmed live round.
 """
 from dataclasses import dataclass
 import cv2
@@ -15,6 +15,7 @@ class RopePosition:
     coverage: float
     offset: float
     color: str = 'blue'
+    contrast: float = 0.
 
 
 class RopeTracker:
@@ -52,6 +53,9 @@ class RopeTracker:
         best = int(scores.argmax())
         line_y = np.clip(yi[best], 0, 539)
         line_x = np.rint(self.x*960).astype(int)
+        neighbor_above = mask[np.clip(line_y-7, 0, 539), line_x] > 0
+        neighbor_below = mask[np.clip(line_y+7, 0, 539), line_x] > 0
+        contrast = scores[best] - .5*(neighbor_above.mean()+neighbor_below.mean())
         color_counts = {
             'blue': np.count_nonzero(blue[line_y, line_x]),
             'gold': np.count_nonzero(gold[line_y, line_x]),
@@ -59,7 +63,7 @@ class RopeTracker:
         }
         color = max(color_counts, key=color_counts.get)
         return RopePosition(float(self.candidates[best, 0]), float(scores[best]),
-                            float(self.candidates[best, 1]), color)
+                            float(self.candidates[best, 1]), color, float(contrast))
 
 
 class VisualPassDetector:

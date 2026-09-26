@@ -13,10 +13,20 @@ p.add_argument('video')
 p.add_argument('--start', type=float, default=47)
 p.add_argument('--end', type=float, default=155)
 p.add_argument('--output', default='debug/visual-pass.json')
+p.add_argument('--crop', nargs=4, type=int, metavar=('LEFT', 'TOP', 'RIGHT', 'BOTTOM'),
+               default=(526, 286, 1700, 944), help='game client rectangle in video pixels')
 a = p.parse_args()
 cap = cv2.VideoCapture(a.video)
+if not cap.isOpened():
+    raise SystemExit(f'Cannot open video: {a.video}')
 fps = cap.get(cv2.CAP_PROP_FPS)
+if fps <= 0:
+    raise SystemExit(f'Cannot read video frame rate: {a.video}')
 first, last = round(a.start*fps), round(a.end*fps)
+left, top, right, bottom = a.crop
+if not (0 <= left < right <= cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        and 0 <= top < bottom <= cap.get(cv2.CAP_PROP_FRAME_HEIGHT)):
+    raise SystemExit(f'Invalid crop: {a.crop}')
 cap.set(cv2.CAP_PROP_POS_FRAMES, first)
 detector = VisualPassDetector()
 gate = RoundGate()
@@ -27,7 +37,7 @@ for index in range(first, last):
         raise RuntimeError(f'Decode failed at {index/fps}')
     if index % 3:
         continue
-    client = frame[286:944,526:1700]
+    client = frame[top:bottom, left:right]
     allowed = gate.observe(client)
     if gate.finished:
         break
@@ -36,7 +46,8 @@ for index in range(first, last):
     t = index/fps
     fired = detector.observe(client, t)
     pos = detector.position
-    samples.append([round(t, 3), round(pos.sag+pos.offset, 3), round(pos.coverage, 3), fired])
+    samples.append([round(t, 3), round(pos.sag+pos.offset, 3),
+                    round(pos.coverage, 3), pos.color, round(pos.contrast, 3), fired])
     if fired:
         events.append(round(t, 3))
         print(f'Visual event {t:.3f}', flush=True)
