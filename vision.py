@@ -198,6 +198,28 @@ class RoundGate:
         return ((750+m['m10']/m['m00'])/960, (375+m['m01']/m['m00'])/540)
 
     @staticmethod
+    def player_ready(frame: np.ndarray) -> bool:
+        """The controlled player's yellow pointer must be above the lineup.
+
+        After a hit the character leaves the lineup while the HUD and other
+        players remain active; those frames must never authorize input.
+        """
+        if frame.size == 0:
+            return False
+        hsv = cv2.cvtColor(cv2.resize(frame, (960, 540)), cv2.COLOR_BGR2HSV)
+        region = cv2.inRange(hsv[95:250, 500:600], (18, 110, 170), (42, 255, 255))
+        contours, _ = cv2.findContours(region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            x, y, width, height = cv2.boundingRect(contour)
+            if 22 <= area <= 110 and 6 <= width <= 22 and 5 <= height <= 17:
+                center_x = (500 + x + width/2) / 960
+                center_y = (95 + y + height/2) / 540
+                if .53 <= center_x <= .60 and .20 <= center_y <= .45:
+                    return True
+        return False
+
+    @staticmethod
     def gameplay_visible(frame: np.ndarray) -> bool:
         if frame.size == 0:
             return False

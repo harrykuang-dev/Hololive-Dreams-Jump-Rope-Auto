@@ -110,7 +110,7 @@ class JumpRopeBot:
         if self._stop.is_set() or win32gui.GetForegroundWindow() != self._hwnd:
             self.stop()
             return False
-        if not RoundGate.gameplay_visible(frame):
+        if not RoundGate.gameplay_visible(frame) or not RoundGate.player_ready(frame):
             self.stop()
             return False
         point = RoundGate.jump_position(frame)
@@ -151,7 +151,7 @@ class JumpRopeBot:
                 if gate.finished:
                     LOG.info("本局結束或畫面無法確認，已停止；不會點擊下一步")
                     break
-                if not allowed:
+                if not allowed or not RoundGate.player_ready(frame):
                     self._sleep(0.02)
                     continue
                 if detector.observe(frame, now):
@@ -160,7 +160,7 @@ class JumpRopeBot:
                         fresh = capture.grab()
                         if not gate.observe(fresh):
                             break
-                        if self.tap_jump(fresh):
+                        if RoundGate.player_ready(fresh) and self.tap_jump(fresh):
                             self.tap_count += 1
                 self.last_detector_score = detector.last_score
                 self._sleep(0.012)
