@@ -8,6 +8,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 import win32api
@@ -17,6 +18,7 @@ import win32process
 
 from vision import GameCapture, RoundGate
 from rope_track import VisualPassDetector
+from round_recording import RoundRecorder
 
 LOG = logging.getLogger("jump-rope-auto")
 
@@ -31,10 +33,13 @@ class BotConfig:
     window_class: str = "UnityWndClass"
     key_down_time: float = 0.025
     observe_only: bool = False
+    record_path: Path | None = None
 
     def validate(self) -> None:
         if not 0.001 <= self.key_down_time <= 0.05:
             raise ValueError("key_down_time must be between 0.001 and 0.05 seconds")
+        if self.record_path is not None and self.record_path.suffix.lower() != ".mp4":
+            raise ValueError("record_path must end in .mp4")
 
 
 class JumpRopeBot:
@@ -55,6 +60,8 @@ class JumpRopeBot:
         self.candidate_count = 0
         self.last_error: Exception | None = None
         self.last_detector_score = 0.0
+        self.stop_reason = "not_started"
+        self.last_tap_at: float | None = None
 
     @property
     def running(self) -> bool:
@@ -123,6 +130,7 @@ class JumpRopeBot:
         screen_x, screen_y = win32gui.ClientToScreen(self._hwnd, (client_x, client_y))
         win32api.SetCursorPos((screen_x, screen_y))
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+        self.last_tap_at = self._clock()
         try:
             self._sleep(self.config.key_down_time)
         finally:
@@ -134,41 +142,85 @@ class JumpRopeBot:
         self.tap_count = 0
         self.candidate_count = 0
         self.last_error = None
+        self.stop_reason = "stopped"
+        self.last_tap_at = None
+        recorder: RoundRecorder | None = None
         try:
             self.focus_game()
             detector = VisualPassDetector()
             gate = RoundGate()
             capture = GameCapture(self._hwnd)
+            started = self._clock()
             while not self._stop.is_set():
                 if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
+                    self.stop_reason = "F9"
                     break
                 if win32gui.GetForegroundWindow() != self._hwnd:
                     LOG.info("遊戲失去焦點，停止輸入")
+                    self.stop_reason = "focus_lost"
                     break
                 frame = capture.grab()
                 now = self._clock()
+                if self.config.record_path is not None and recorder is None:
+                    recorder = RoundRecorder(self.config.record_path, frame)
                 allowed = gate.observe(frame)
+                ready = RoundGate.player_ready(frame) if allowed else False
+                candidate = False
+                clicked = False
                 if gate.finished:
                     LOG.info("本局結束或畫面無法確認，已停止；不會點擊下一步")
+                    self.stop_reason = "round_finished"
+                    if recorder:
+                        recorder.add(frame, now-started, hud=False, ready=False,
+                                     candidate=False, clicked=False,
+                                     detector_score=detector.last_score)
                     break
-                if not allowed or not RoundGate.player_ready(frame):
+                if not allowed or not ready:
+                    if recorder:
+                        recorder.add(frame, now-started, hud=allowed, ready=ready,
+                                     candidate=False, clicked=False,
+                                     detector_score=detector.last_score)
                     self._sleep(0.02)
                     continue
-                if detector.observe(frame, now):
+                candidate = detector.observe(frame, now)
+                if candidate:
                     self.candidate_count += 1
                     if not self.config.observe_only:
                         fresh = capture.grab()
                         if not gate.observe(fresh):
+                            self.stop_reason = "round_finished"
+                            if recorder:
+                                recorder.add(fresh, self._clock()-started, hud=False,
+                                             ready=False, candidate=False, clicked=False,
+                                             detector_score=detector.last_score)
                             break
                         if RoundGate.player_ready(fresh) and self.tap_jump(fresh):
                             self.tap_count += 1
+                            clicked = True
                 self.last_detector_score = detector.last_score
+                if recorder:
+                    recorder.add(frame, now-started, hud=allowed, ready=ready,
+                                 candidate=candidate, clicked=clicked,
+                                 detector_score=detector.last_score,
+                                 input_elapsed=(self.last_tap_at-started)
+                                 if clicked and self.last_tap_at is not None else None)
                 self._sleep(0.012)
         except Exception as error:
             self.last_error = error
+            self.stop_reason = "error"
             LOG.exception("自動跳繩已停止")
         finally:
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+            if recorder:
+                try:
+                    recorder.close(stop_reason=self.stop_reason,
+                                   tap_count=self.tap_count,
+                                   candidate_count=self.candidate_count,
+                                   error=str(self.last_error) if self.last_error else None)
+                except Exception as error:
+                    LOG.exception("無法完成錄影紀錄")
+                    if self.last_error is None:
+                        self.last_error = error
             self._running.clear()
 
     def run(self, duration: float | None = None) -> None:
@@ -209,9 +261,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Hololive Dreams 跳繩自動遊玩程式")
     parser.add_argument("--duration", type=float, help="測試秒數；省略則持續執行")
     parser.add_argument("--observe", action="store_true", help="只觀察繩子，不送出輸入")
+    parser.add_argument("--record", type=Path, help="儲存本局影片及逐幀輸入紀錄（MP4）")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    bot = JumpRopeBot(BotConfig(observe_only=args.observe))
+    bot = JumpRopeBot(BotConfig(observe_only=args.observe, record_path=args.record))
     try:
         print("只觀察，不輸入" if args.observe else "開始單局視覺跳繩（尚未驗證100下）")
         print("按 F9 或 Ctrl+C 停止。")
@@ -222,7 +275,9 @@ def main() -> int:
         print(f"錯誤：{error}")
         return 1
     finally:
-        print(f"已停止，共送出 {bot.tap_count} 次跳躍輸入。")
+        print(f"已停止，共送出 {bot.tap_count} 次跳躍輸入；原因：{bot.stop_reason}。")
+        if args.record:
+            print(f"本局錄影：{args.record}；逐幀紀錄：{args.record.with_suffix('.events.json')}")
     return 0
 
 
