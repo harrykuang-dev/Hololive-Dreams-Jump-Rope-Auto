@@ -16,9 +16,9 @@ class App(tk.Tk):
         panel = ttk.Frame(self, padding=20)
         panel.pack(fill="both", expand=True)
         ttk.Label(panel, text="Hololive Dreams 跳繩自動遊玩", font=("", 16, "bold")).pack()
-        ttk.Label(panel, text="預設只觀察繩子；100 下尚未驗證。\n辨識完整繩形及最低處的回升，不按固定節奏。", justify="center").pack(pady=(12, 10))
-        self.play_enabled = tk.BooleanVar(value=False)
-        ttk.Checkbutton(panel, text="啟用實驗性單局輸入（可能漏判）", variable=self.play_enabled).pack()
+        ttk.Label(panel, text="自動辨識繩子掃過腳邊；100 下尚未驗證。\n遊戲結算或失去焦點後立即停止。", justify="center").pack(pady=(12, 10))
+        self.observe_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(panel, text="只觀察，不送出輸入", variable=self.observe_only).pack()
         ttk.Label(panel, text="只執行本局；結算或失去焦點後停止。F9 可全域停止。").pack()
         buttons = ttk.Frame(panel)
         buttons.pack(pady=15)
@@ -36,7 +36,7 @@ class App(tk.Tk):
         if self.bot and self.bot.running:
             return
         try:
-            config = BotConfig(observe_only=not self.play_enabled.get())
+            config = BotConfig(observe_only=self.observe_only.get())
             config.validate()
             self.bot = JumpRopeBot(config)
             self.bot.find_game()

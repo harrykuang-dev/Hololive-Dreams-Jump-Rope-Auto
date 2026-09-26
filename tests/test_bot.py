@@ -56,11 +56,14 @@ def test_non_positive_duration_is_rejected():
         JumpRopeBot().run(0)
 
 
-def test_default_does_not_send_input():
-    bot = JumpRopeBot()
-    assert bot.config.observe_only
+def test_observation_mode_does_not_send_input():
+    bot = JumpRopeBot(BotConfig(observe_only=True))
     assert not bot.tap_jump(live_frame())
     assert bot.tap_count == 0
+
+
+def test_default_is_single_round_play():
+    assert not JumpRopeBot().config.observe_only
 
 
 def test_jump_position_is_derived_from_visible_button():
@@ -78,11 +81,11 @@ def measured_detector(positions):
 
 
 @pytest.mark.parametrize('step', [.025, .05, .10])
-def test_visual_reversal_is_one_event_at_variable_speed(step):
-    positions = [RopePosition(h, .8, 0) for h in [-.3, -.1, .08, .14, .13, .10, .08, .08]]
+def test_visual_crossing_is_one_event_at_variable_speed(step):
+    positions = [RopePosition(h, .8, 0) for h in [-.3, -.25, -.1, .08, .14, .13, .10, .08]]
     detector = measured_detector(positions)
     events = [detector.observe(None, i*step) for i in range(len(positions))]
-    assert events == [False, False, False, False, False, True, False, False]
+    assert events == [False, False, False, False, True, False, False, False]
 
 
 def test_standing_still_never_generates_periodic_clicks():

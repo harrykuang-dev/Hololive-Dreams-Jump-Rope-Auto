@@ -30,7 +30,7 @@ class BotConfig:
     window_title: str = "hololive-Dreams"
     window_class: str = "UnityWndClass"
     key_down_time: float = 0.025
-    observe_only: bool = True
+    observe_only: bool = False
 
     def validate(self) -> None:
         if not 0.001 <= self.key_down_time <= 0.05:
@@ -208,12 +208,12 @@ class JumpRopeBot:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Hololive Dreams 跳繩自動遊玩程式")
     parser.add_argument("--duration", type=float, help="測試秒數；省略則持續執行")
-    parser.add_argument("--play", action="store_true", help="開啟實驗性單局輸入（未驗證100下）；預設只觀察")
+    parser.add_argument("--observe", action="store_true", help="只觀察繩子，不送出輸入")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    bot = JumpRopeBot(BotConfig(observe_only=not args.play))
+    bot = JumpRopeBot(BotConfig(observe_only=args.observe))
     try:
-        print("實驗性單局輸入" if args.play else "只觀察，不輸入")
+        print("只觀察，不輸入" if args.observe else "開始單局視覺跳繩（尚未驗證100下）")
         print("按 F9 或 Ctrl+C 停止。")
         bot.run(args.duration)
     except KeyboardInterrupt:
