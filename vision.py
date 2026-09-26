@@ -199,11 +199,7 @@ class RoundGate:
 
     @staticmethod
     def player_ready(frame: np.ndarray) -> bool:
-        """The controlled player's yellow pointer must be above the lineup.
-
-        After a hit the character leaves the lineup while the HUD and other
-        players remain active; those frames must never authorize input.
-        """
+        """Check the central player's marker, independent of costume."""
         if frame.size == 0:
             return False
         hsv = cv2.cvtColor(cv2.resize(frame, (960, 540)), cv2.COLOR_BGR2HSV)
@@ -245,3 +241,4 @@ class RoundGate:
         if self._confirmations >= 3:
             self.active = True
         return self.active
+
