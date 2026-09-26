@@ -14,6 +14,7 @@ class RopePosition:
     sag: float
     coverage: float
     offset: float
+    color: str = 'blue'
 
 
 class RopeTracker:
@@ -34,7 +35,9 @@ class RopeTracker:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         blue = cv2.inRange(hsv, (95, 30, 85), (125, 220, 255))
         white = cv2.inRange(hsv, (0, 0, 195), (180, 50, 255))
-        mask = cv2.bitwise_or(blue, white)
+        gold = cv2.inRange(hsv, (15, 80, 170), (42, 255, 255))
+        pink = cv2.inRange(hsv, (140, 65, 150), (179, 255, 255))
+        mask = blue | white | gold | pink
         if self.previous is None:
             self.previous = frame
             return RopePosition(0., 0., 0.)
@@ -47,20 +50,29 @@ class RopeTracker:
         samples = (mask[np.clip(yi, 0, 539), np.rint(self.x*960).astype(int)] > 0) & valid
         scores = samples.mean(axis=1)
         best = int(scores.argmax())
+        line_y = np.clip(yi[best], 0, 539)
+        line_x = np.rint(self.x*960).astype(int)
+        color_counts = {
+            'blue': np.count_nonzero(blue[line_y, line_x]),
+            'gold': np.count_nonzero(gold[line_y, line_x]),
+            'pink': np.count_nonzero(pink[line_y, line_x]),
+        }
+        color = max(color_counts, key=color_counts.get)
         return RopePosition(float(self.candidates[best, 0]), float(scores[best]),
-                            float(self.candidates[best, 1]))
+                            float(self.candidates[best, 1]), color)
 
 
 class VisualPassDetector:
-    """Experimental full-curve reversal detector; no periodic fallback.
+    """Experimental visual foot-zone crossing detector; no periodic fallback.
 
-    Require visible overhead rope, then visible foreground rope, then a
-    measured upward turn. Missing evidence invalidates the current pass.
+    Require the measured moving rope to approach and cross the foot zone.
+    Missing evidence invalidates the current pass.
     """
     def __init__(self):
         self.tracker = RopeTracker()
         self.armed = False
-        self.peak = None
+        self.below_count = 0
+        self.previous_height = None
         self.last_time = None
         self.last_score = 0.
         self.position = RopePosition(0., 0., 0.)
@@ -71,20 +83,28 @@ class VisualPassDetector:
         self.last_score = p.coverage
         if self.last_time is not None and not 0 < now-self.last_time <= .15:
             self.armed = False
-            self.peak = None
+            self.below_count = 0
+            self.previous_height = None
         self.last_time = now
         if p.coverage < .35:
             self.armed = False
-            self.peak = None
+            self.below_count = 0
+            self.previous_height = None
             return False
         height = p.sag+p.offset
-        if height < -.15:
-            self.armed = True
-            self.peak = None
-        elif self.armed and height >= .07:
-            self.peak = max(height, self.peak if self.peak is not None else height)
-        if self.armed and self.peak is not None and height < self.peak-.022:
+        threshold = .09 if p.color == 'blue' else 0.
+        if height < (-.15 if p.color == 'blue' else -.065):
+            self.below_count += 1
+            if self.below_count >= 2:
+                self.armed = True
+        else:
+            self.below_count = 0
+        crossed = (self.armed and self.previous_height is not None
+                   and self.previous_height < threshold <= height
+                   and height-self.previous_height <= .22)
+        self.previous_height = height
+        if crossed:
             self.armed = False
-            self.peak = None
+            self.below_count = 0
             return True
         return False
