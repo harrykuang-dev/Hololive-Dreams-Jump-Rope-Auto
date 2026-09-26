@@ -13,6 +13,7 @@ def live_frame():
     cv2.rectangle(frame, (65, 200), (85, 220), (0, 255, 70), -1)
     cv2.rectangle(frame, (800, 400), (840, 450), (0, 240, 255), -1)
     cv2.putText(frame, '20', (45, 105), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5)
+    cv2.fillConvexPoly(frame, np.array([[540, 193], [532, 205], [548, 205]]), (0, 240, 255))
     return frame
 
 
@@ -44,6 +45,13 @@ def test_zero_lives_disables_input():
     frame[190:235, 55:155] = 0
     assert not gate.observe(frame)
     assert gate.finished
+
+
+def test_player_leaving_lineup_disables_input():
+    frame = live_frame()
+    assert RoundGate.player_ready(frame)
+    frame[190:210, 530:550] = 0
+    assert not RoundGate.player_ready(frame)
 
 
 def test_rapid_configuration_is_removed():

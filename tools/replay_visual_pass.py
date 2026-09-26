@@ -31,7 +31,7 @@ for index in range(first, last):
     allowed = gate.observe(client)
     if gate.finished:
         break
-    if not allowed:
+    if not allowed or not RoundGate.player_ready(client):
         continue
     t = index/fps
     fired = detector.observe(client, t)
