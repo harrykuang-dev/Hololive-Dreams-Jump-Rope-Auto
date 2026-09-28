@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 
-FRAMES = Path(r"C:\Users\ashel\Downloads\Hololive-Jump-Rope-Auto\debug\video_frames")
+FRAMES = Path(__file__).resolve().parents[1] / "debug" / "video_frames"
 
 
 def rope_mask(frame: np.ndarray) -> np.ndarray:
@@ -18,10 +18,10 @@ def rope_mask(frame: np.ndarray) -> np.ndarray:
     return cv2.bitwise_or(blue, white)
 
 
-def danger_score(frame: np.ndarray) -> int:
+def danger_score(frame: np.ndarray, crop: tuple[int, int, int, int]) -> int:
     # Coordinates are normalized to the visible game client in the recording.
-    height, width = frame.shape[:2]
-    game = frame[286:944, 526:1700]
+    left, top, right, bottom = crop
+    game = frame[top:bottom, left:right]
     gh, gw = game.shape[:2]
     region = game[int(gh * 0.52):int(gh * 0.82), int(gw * 0.34):int(gw * 0.76)]
     mask = rope_mask(region)
@@ -38,7 +38,10 @@ def main() -> None:
     parser.add_argument("--start", type=float, default=44.0)
     parser.add_argument("--end", type=float, default=76.0)
     parser.add_argument("--step", type=float, default=0.1)
+    parser.add_argument("--crop", nargs=4, type=int, default=(448, 144, 1773, 889),
+                        metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"))
     args = parser.parse_args()
+    crop = tuple(args.crop)
     if args.video:
         capture = cv2.VideoCapture(args.video)
         timestamp = args.start
@@ -47,12 +50,12 @@ def main() -> None:
             ok, frame = capture.read()
             if not ok:
                 break
-            print(f"{timestamp:.3f} {danger_score(frame)}")
+            print(f"{timestamp:.3f} {danger_score(frame, crop)}")
             timestamp += args.step
         return
     for path in sorted(FRAMES.glob("*.png")):
         frame = cv2.imread(str(path))
-        print(path.stem, danger_score(frame))
+        print(path.stem, danger_score(frame, crop))
 
 
 if __name__ == "__main__":

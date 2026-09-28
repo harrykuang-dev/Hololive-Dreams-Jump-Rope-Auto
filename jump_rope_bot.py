@@ -16,7 +16,7 @@ import win32con
 import win32gui
 import win32process
 
-from vision import GameCapture, RoundGate
+from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen
 from rope_track import VisualPassDetector
 from round_recording import RoundRecorder
 
@@ -34,12 +34,29 @@ class BotConfig:
     key_down_time: float = 0.025
     observe_only: bool = False
     record_path: Path | None = None
+    wait_for_round: bool = False
+    startup_timeout: float = 120.0
+    round_timeout: float | None = None
+    result_postroll: float = 1.0
+    auto_start: bool = False
+    target_fps: float = 60.0
+    capture_backend: str = 'screen'
 
     def validate(self) -> None:
         if not 0.001 <= self.key_down_time <= 0.05:
             raise ValueError("key_down_time must be between 0.001 and 0.05 seconds")
         if self.record_path is not None and self.record_path.suffix.lower() != ".mp4":
             raise ValueError("record_path must end in .mp4")
+        if self.startup_timeout <= 0:
+            raise ValueError("startup_timeout must be positive")
+        if self.round_timeout is not None and self.round_timeout <= 0:
+            raise ValueError("round_timeout must be positive")
+        if not 0 <= self.result_postroll <= 5:
+            raise ValueError("result_postroll must be between 0 and 5 seconds")
+        if not 15 <= self.target_fps <= 60:
+            raise ValueError('target_fps must be between 15 and 60')
+        if self.capture_backend not in ('screen', 'printwindow'):
+            raise ValueError('capture_backend must be screen or printwindow')
 
 
 class JumpRopeBot:
@@ -62,6 +79,11 @@ class JumpRopeBot:
         self.last_detector_score = 0.0
         self.stop_reason = "not_started"
         self.last_tap_at: float | None = None
+        self.round_started_at: float | None = None
+        self.input_times: list[float] = []
+        self.menu_actions: list[tuple[str, float]] = []
+        self.recording_performance = None
+        self._mouse_down = False
 
     @property
     def running(self) -> bool:
@@ -130,11 +152,51 @@ class JumpRopeBot:
         screen_x, screen_y = win32gui.ClientToScreen(self._hwnd, (client_x, client_y))
         win32api.SetCursorPos((screen_x, screen_y))
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+        self._mouse_down = True
         self.last_tap_at = self._clock()
+        self.input_times.append(self.last_tap_at)
         try:
             self._sleep(self.config.key_down_time)
         finally:
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+            self._mouse_down = False
+        return True
+
+    def tap_startup(self, action: str, frame, screen: StartupScreen) -> bool:
+        """One pre-round menu click; this path is disabled after round entry."""
+        if (self.config.observe_only or not self.config.auto_start
+                or self.round_started_at is not None or self._stop.is_set()
+                or not self._hwnd or win32gui.GetForegroundWindow() != self._hwnd
+                or screen.identify(frame) != action):
+            return False
+        x, y = StartupScreen.BUTTONS[action]
+        left, top, right, bottom = win32gui.GetClientRect(self._hwnd)
+        client = (round((right-left)*x), round((bottom-top)*y))
+        win32api.SetCursorPos(win32gui.ClientToScreen(self._hwnd, client))
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+        self._mouse_down = True
+        self.menu_actions.append((action, self._clock()))
+        try:
+            # Menu UI polling is independent of the short, visual-timed jump tap.
+            # Hold across several Unity frames so a newly opened page receives it.
+            self._sleep(0.12)
+        finally:
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+            self._mouse_down = False
+        return True
+
+    def _result_tail_allowed(self) -> bool:
+        # A stop during the non-input recording tail must also cancel the
+        # batch runner's permission to open the next round.
+        if self._stop.is_set():
+            self.stop_reason = 'stopped'
+            return False
+        if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
+            self.stop_reason = 'F9'
+            return False
+        if win32gui.GetForegroundWindow() != self._hwnd:
+            self.stop_reason = 'focus_lost'
+            return False
         return True
 
     def _loop(self) -> None:
@@ -144,14 +206,28 @@ class JumpRopeBot:
         self.last_error = None
         self.stop_reason = "stopped"
         self.last_tap_at = None
+        self.round_started_at = None
+        self.input_times = []
+        self.menu_actions = []
+        self.recording_performance = None
+        self._mouse_down = False
         recorder: RoundRecorder | None = None
+        postroll_done = False
         try:
             self.focus_game()
             detector = VisualPassDetector()
             gate = RoundGate()
-            capture = GameCapture(self._hwnd)
+            startup_screen = StartupScreen() if self.config.auto_start and not self.config.observe_only else None
+            navigator = StartupNavigator(startup_screen) if startup_screen is not None else None
+            capture = (GameCapture(self._hwnd) if self.config.capture_backend == 'screen'
+                       else GameCapture(self._hwnd, backend=self.config.capture_backend))
+            LOG.info('擷取後端：%s；目標 %.0f FPS', self.config.capture_backend, self.config.target_fps)
             started = self._clock()
+            last_report = started
             while not self._stop.is_set():
+                loop_started = self._clock()
+                if recorder is not None:
+                    recorder.check_health()
                 if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
                     self.stop_reason = "F9"
                     break
@@ -161,66 +237,187 @@ class JumpRopeBot:
                     break
                 frame = capture.grab()
                 now = self._clock()
+                timing = {'capture_ms': round((now-loop_started)*1000, 3)}
                 if self.config.record_path is not None and recorder is None:
-                    recorder = RoundRecorder(self.config.record_path, frame)
+                    recorder = RoundRecorder(self.config.record_path, frame, fps=self.config.target_fps)
+                gate_started = self._clock()
                 allowed = gate.observe(frame)
+                # Even one live-HUD frame permanently disables startup clicks.
+                # This covers a very short round that ends before the gate's
+                # three-frame confirmation can latch.
+                if navigator is not None and not navigator.finished and RoundGate.gameplay_visible(frame):
+                    navigator.seal()
                 ready = RoundGate.player_ready(frame) if allowed else False
+                timing['gate_ms'] = round((self._clock()-gate_started)*1000, 3)
                 candidate = False
                 clicked = False
+                measured = False
+                fresh_hud = None
+                fresh_ready = None
+                if allowed and self.round_started_at is None:
+                    self.round_started_at = now
+                    if navigator is not None:
+                        navigator.seal()
+                    LOG.info("已確認單局遊玩畫面；開始%s", "只觀察" if self.config.observe_only else "視覺控制")
+                phase = ("result" if gate.finished else
+                         "round" if self.round_started_at is not None else "waiting")
+                def record(observed_frame, at, *, hud, player_ready, event=False,
+                           sent=False, input_elapsed=None, menu_action=None,
+                           menu_input_elapsed=None):
+                    if recorder is None:
+                        return
+                    p = detector.position if measured else None
+                    recorder.add(
+                        observed_frame, at-started, hud=hud, ready=player_ready,
+                        candidate=event, clicked=sent,
+                        detector_score=detector.last_score,
+                        input_elapsed=input_elapsed,
+                        telemetry={
+                            **timing,
+                            'capture_backend': self.config.capture_backend,
+                            **(getattr(detector, 'telemetry', lambda: {})() if measured else {}),
+                            "phase": phase,
+                            "rope_height": round(p.sag+p.offset, 4) if p else None,
+                            "rope_coverage": round(p.coverage, 4) if p else None,
+                            "rope_color": p.color if p else None,
+                            "rope_contrast": round(p.contrast, 4) if p else None,
+                            "fresh_hud": fresh_hud,
+                            "fresh_ready": fresh_ready,
+                            "menu_action": menu_action,
+                            "menu_input_t": round(menu_input_elapsed, 4)
+                            if menu_input_elapsed is not None else None,
+                        },
+                    )
                 if gate.finished:
+                    if navigator is not None:
+                        navigator.seal()
                     LOG.info("本局結束或畫面無法確認，已停止；不會點擊下一步")
                     self.stop_reason = "round_finished"
-                    if recorder:
-                        recorder.add(frame, now-started, hud=False, ready=False,
-                                     candidate=False, clicked=False,
-                                     detector_score=detector.last_score)
+                    record(frame, now, hud=False, player_ready=False)
+                    postroll_until = self._clock() + self.config.result_postroll
+                    while self._clock() < postroll_until and self._result_tail_allowed():
+                        self._sleep(0.05)
+                        tail = capture.grab()
+                        record(tail, self._clock(), hud=False, player_ready=False)
+                    postroll_done = True
+                    break
+                if self.round_started_at is None and self.config.wait_for_round:
+                    if now-started >= self.config.startup_timeout:
+                        self.stop_reason = "startup_timeout"
+                        record(frame, now, hud=False, player_ready=False)
+                        break
+                if self.round_started_at is None and navigator is not None:
+                    action = navigator.observe(frame)
+                    if action is not None:
+                        fresh = capture.grab()
+                        if startup_screen.identify(fresh) == action and self.tap_startup(
+                                action, fresh, startup_screen):
+                            navigator.mark_clicked(action)
+                            LOG.info("啟動前已辨識並點擊 %s；本局結束後不會再操作選單", action)
+                            record(frame, now, hud=False, player_ready=False,
+                                   menu_action=action,
+                                   menu_input_elapsed=self.menu_actions[-1][1]-started)
+                            continue
+                if (self.round_started_at is not None
+                        and self.config.round_timeout is not None
+                        and now-self.round_started_at >= self.config.round_timeout):
+                    self.stop_reason = "round_timeout"
+                    record(frame, now, hud=allowed, player_ready=ready)
                     break
                 if not allowed or not ready:
-                    if recorder:
-                        recorder.add(frame, now-started, hud=allowed, ready=ready,
-                                     candidate=False, clicked=False,
-                                     detector_score=detector.last_score)
+                    record(frame, now, hud=allowed, player_ready=ready)
                     self._sleep(0.02)
                     continue
+                detector_started = self._clock()
                 candidate = detector.observe(frame, now)
+                timing['detector_ms'] = round((self._clock()-detector_started)*1000, 3)
+                measured = True
                 if candidate:
                     self.candidate_count += 1
                     if not self.config.observe_only:
+                        if recorder is not None:
+                            recorder.check_health()
+                        fresh_started = self._clock()
                         fresh = capture.grab()
-                        if not gate.observe(fresh):
+                        timing['fresh_capture_ms'] = round((self._clock()-fresh_started)*1000, 3)
+                        fresh_hud = gate.observe(fresh)
+                        fresh_ready = RoundGate.player_ready(fresh) if fresh_hud else False
+                        if not fresh_hud:
                             self.stop_reason = "round_finished"
-                            if recorder:
-                                recorder.add(fresh, self._clock()-started, hud=False,
-                                             ready=False, candidate=False, clicked=False,
-                                             detector_score=detector.last_score)
+                            phase = "result"
+                            record(fresh, self._clock(), hud=False, player_ready=False)
                             break
-                        if RoundGate.player_ready(fresh) and self.tap_jump(fresh):
+                        if fresh_ready and self.tap_jump(fresh):
                             self.tap_count += 1
                             clicked = True
+                            timing['input_delay_ms'] = round((self.last_tap_at-now)*1000, 3)
                 self.last_detector_score = detector.last_score
-                if recorder:
-                    recorder.add(frame, now-started, hud=allowed, ready=ready,
-                                 candidate=candidate, clicked=clicked,
-                                 detector_score=detector.last_score,
-                                 input_elapsed=(self.last_tap_at-started)
-                                 if clicked and self.last_tap_at is not None else None)
-                self._sleep(0.012)
+                record(frame, now, hud=allowed, player_ready=ready,
+                       event=candidate, sent=clicked,
+                       input_elapsed=(self.last_tap_at-started)
+                       if clicked and self.last_tap_at is not None else None)
+                if now-last_report >= 5:
+                    LOG.info("候選=%d，已送出輸入=%d；此數字不是遊戲分數",
+                             self.candidate_count, self.tap_count)
+                    last_report = now
+                # Budget the entire iteration, not an extra sleep after work.
+                # This schedules observations only; it never schedules jumps.
+                remaining = 1/self.config.target_fps-(self._clock()-loop_started)
+                if remaining > 0:
+                    self._sleep(remaining)
         except Exception as error:
             self.last_error = error
             self.stop_reason = "error"
             LOG.exception("自動跳繩已停止")
         finally:
-            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+            if self._mouse_down:
+                try:
+                    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+                    self._mouse_down = False
+                except Exception as error:
+                    LOG.warning("無法確認滑鼠按鍵已釋放：%s", error)
+            if (self.stop_reason == "round_finished" and not postroll_done
+                    and recorder is not None and 'capture' in locals()):
+                try:
+                    postroll_until = self._clock() + self.config.result_postroll
+                    while self._clock() < postroll_until and self._result_tail_allowed():
+                        self._sleep(0.05)
+                        tail = capture.grab()
+                        recorder.add(tail, self._clock()-started, hud=False, ready=False,
+                                     candidate=False, clicked=False,
+                                     detector_score=detector.last_score,
+                                     telemetry={"phase": "result", "rope_height": None,
+                                                "rope_coverage": None, "rope_color": None,
+                                                "rope_contrast": None, "fresh_hud": None,
+                                                "fresh_ready": None})
+                except Exception as error:
+                    LOG.warning("結算後錄影尾段未完成：%s", error)
+                    self.stop_reason = 'recording_error'
+                    if self.last_error is None:
+                        self.last_error = error
             if recorder:
                 try:
                     recorder.close(stop_reason=self.stop_reason,
                                    tap_count=self.tap_count,
                                    candidate_count=self.candidate_count,
-                                   error=str(self.last_error) if self.last_error else None)
+                                   error=str(self.last_error) if self.last_error else None,
+                                   round_started_t=(self.round_started_at-started)
+                                   if self.round_started_at is not None else None,
+                                   input_times=[round(t-started, 4) for t in self.input_times],
+                                   menu_actions=[{"action": action, "t": round(t-started, 4)}
+                                                 for action, t in self.menu_actions])
+                    self.recording_performance = getattr(recorder, 'performance', None)
                 except Exception as error:
                     LOG.exception("無法完成錄影紀錄")
+                    self.stop_reason = 'recording_error'
                     if self.last_error is None:
                         self.last_error = error
+            if 'capture' in locals():
+                try:
+                    getattr(capture, 'close', lambda: None)()
+                except Exception as error:
+                    self.stop_reason = 'capture_close_error'
+                    self.last_error = self.last_error or error
             self._running.clear()
 
     def run(self, duration: float | None = None) -> None:

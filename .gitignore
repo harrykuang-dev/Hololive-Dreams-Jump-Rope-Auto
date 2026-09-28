@@ -7,3 +7,4 @@ build/
 *.spec
 *.log
 debug/
+recordings/
