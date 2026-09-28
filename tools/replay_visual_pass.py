@@ -13,6 +13,8 @@ p.add_argument('video')
 p.add_argument('--start', type=float, default=47)
 p.add_argument('--end', type=float, default=155)
 p.add_argument('--output', default='debug/visual-pass.json')
+p.add_argument('--stride', type=int, default=3, choices=(1, 2, 3, 4),
+               help='Source-frame stride; 1 preserves native 60 FPS, no interpolation')
 p.add_argument('--crop', nargs=4, type=int, metavar=('LEFT', 'TOP', 'RIGHT', 'BOTTOM'),
                default=(526, 286, 1700, 944), help='game client rectangle in video pixels')
 a = p.parse_args()
@@ -35,7 +37,7 @@ for index in range(first, last):
     ok, frame = cap.read()
     if not ok:
         raise RuntimeError(f'Decode failed at {index/fps}')
-    if index % 3:
+    if index % a.stride:
         continue
     client = frame[top:bottom, left:right]
     allowed = gate.observe(client)
