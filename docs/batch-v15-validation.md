@@ -73,4 +73,4 @@ v15 第五局实际结算 **102 下**，达到单局至少 100 的目标。七�
 
 最新 **168 项单元测试通过**，包括静止加载等待／超时／F9／失焦／实战停帧、DXGI 新鲜度及安全检查、七轮录影压力、磁盘故障、菜单单次重试及结算锁止。真实游戏的 F9／失焦故障注入尚未做，不能以 mock 测试声称做过。
 
-本轮准备本地提交并交付。推送前查询发现原 URL 重定向至 `harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto`，`isPrivate=false`，与原私人仓库约束不符；确认公开推送的目的地前不上传本轮修改，也不改仓库可见性。大型录像及 EXE 不加入 Git。
+本轮源码已本地提交 `aa13c95`。推送前查询发现原 URL 重定向至 `harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto`，`isPrivate=false`；用户已明确确认由自己重命名并公开，授权达标后正常推送。远程 URL 更新为该仓库，不改变可见性、不 force push。大型录像及 EXE 不加入 Git。
