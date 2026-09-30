@@ -16,7 +16,7 @@ import win32con
 import win32gui
 import win32process
 
-from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen
+from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen, TemporaryCaptureOverlayError, NoFreshFrameError
 from rope_track import VisualPassDetector
 from round_recording import RoundRecorder
 
@@ -55,8 +55,8 @@ class BotConfig:
             raise ValueError("result_postroll must be between 0 and 5 seconds")
         if not 15 <= self.target_fps <= 60:
             raise ValueError('target_fps must be between 15 and 60')
-        if self.capture_backend not in ('screen', 'printwindow'):
-            raise ValueError('capture_backend must be screen or printwindow')
+        if self.capture_backend not in ('screen', 'printwindow', 'dxgi'):
+            raise ValueError('capture_backend must be screen, printwindow or dxgi')
 
 
 class JumpRopeBot:
@@ -224,6 +224,8 @@ class JumpRopeBot:
             LOG.info('擷取後端：%s；目標 %.0f FPS', self.config.capture_backend, self.config.target_fps)
             started = self._clock()
             last_report = started
+            captured_once = False
+            gameplay_seen = False
             while not self._stop.is_set():
                 loop_started = self._clock()
                 if recorder is not None:
@@ -235,13 +237,34 @@ class JumpRopeBot:
                     LOG.info("遊戲失去焦點，停止輸入")
                     self.stop_reason = "focus_lost"
                     break
-                frame = capture.grab()
+                try:
+                    frame = capture.grab()
+                except TemporaryCaptureOverlayError:
+                    # The launch action's banner can outlive process startup.
+                    # Before the FIRST pixel capture only, await its removal
+                    # for at most 20s. No frame or input is authorized under it.
+                    # A banner during gameplay still immediately stops the bot.
+                    if captured_once or self._clock()-started >= 20:
+                        raise
+                    self._sleep(.05)
+                    continue
+                except NoFreshFrameError:
+                    # Loading screens may be static. Await new pixels only
+                    # before any live HUD, within the existing startup bound.
+                    if gameplay_seen or not self.config.wait_for_round:
+                        raise
+                    if self._clock()-started >= self.config.startup_timeout:
+                        self.stop_reason = 'startup_timeout'
+                        break
+                    continue
+                captured_once = True
                 now = self._clock()
                 timing = {'capture_ms': round((now-loop_started)*1000, 3)}
                 if self.config.record_path is not None and recorder is None:
                     recorder = RoundRecorder(self.config.record_path, frame, fps=self.config.target_fps)
                 gate_started = self._clock()
                 allowed = gate.observe(frame)
+                gameplay_seen = gameplay_seen or RoundGate.gameplay_visible(frame)
                 # Even one live-HUD frame permanently disables startup clicks.
                 # This covers a very short round that ends before the gate's
                 # three-frame confirmation can latch.
@@ -297,7 +320,10 @@ class JumpRopeBot:
                     postroll_until = self._clock() + self.config.result_postroll
                     while self._clock() < postroll_until and self._result_tail_allowed():
                         self._sleep(0.05)
-                        tail = capture.grab()
+                        try:
+                            tail = capture.grab()
+                        except NoFreshFrameError:
+                            continue  # Result tail is bounded and sends no input.
                         record(tail, self._clock(), hud=False, player_ready=False)
                     postroll_done = True
                     break
@@ -309,7 +335,10 @@ class JumpRopeBot:
                 if self.round_started_at is None and navigator is not None:
                     action = navigator.observe(frame)
                     if action is not None:
-                        fresh = capture.grab()
+                        try:
+                            fresh = capture.grab()
+                        except NoFreshFrameError:
+                            continue  # No fresh pixels means no menu click.
                         if startup_screen.identify(fresh) == action and self.tap_startup(
                                 action, fresh, startup_screen):
                             navigator.mark_clicked(action)

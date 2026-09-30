@@ -5,12 +5,22 @@ from __future__ import annotations
 import ctypes
 from pathlib import Path
 import sys
+import time
 
 import cv2
 import numpy as np
 import win32gui
+import win32api
 import win32ui
 import win32con
+
+
+class TemporaryCaptureOverlayError(RuntimeError):
+    """Computer Use's transient status banner still obstructs the client."""
+
+
+class NoFreshFrameError(RuntimeError):
+    """No new desktop frame; never authorizes reusing captured pixels."""
 
 
 class PrintWindowCapture:
@@ -88,7 +98,11 @@ class ScreenCapture:
                 if status != 0 or not cloaked.value:
                     left, top, right, bottom = win32gui.GetWindowRect(above)
                     if max(left, x) < min(right, x+width) and max(top, y) < min(bottom, y+height):
-                        raise RuntimeError('其他視窗覆蓋遊戲；高速擷取安全停止')
+                        title = win32gui.GetWindowText(above)
+                        error = (TemporaryCaptureOverlayError
+                                 if title == 'ChatGPT is using your computer. Esc to cancel'
+                                 else RuntimeError)
+                        raise error(f'其他視窗覆蓋遊戲；高速擷取安全停止：{title!r}')
             above = win32gui.GetWindow(above, win32con.GW_HWNDPREV)
         return x, y, width, height
 
@@ -142,12 +156,73 @@ class ScreenCapture:
             self.closed = True
 
 
+class DxgiCapture:
+    """Fresh desktop-duplication frames with the same visible-client guard.
+
+    Synchronous grabs only: no buffered old frames or synthetic video mode.
+    This backend currently supports a game wholly on the primary monitor.
+    """
+    def __init__(self, hwnd, *, camera_factory=None, clock=time.perf_counter,
+                 sleeper=time.sleep, fresh_timeout=.1):
+        self.guard = ScreenCapture(hwnd)
+        self.clock, self.sleeper = clock, sleeper
+        self.fresh_timeout = fresh_timeout
+        self.closed = False
+        self.camera = None
+        ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+        user = ctypes.windll.user32
+        if camera_factory is None:
+            import dxcam
+            camera_factory = dxcam.create
+        self.camera = camera_factory(output_color='BGR', backend='dxgi', max_buffer_len=2)
+        if (self.camera.width, self.camera.height) != (user.GetSystemMetrics(0), user.GetSystemMetrics(1)):
+            self.camera.release()
+            self.camera = None
+            raise RuntimeError('DXGI 輸出與主螢幕不吻合；已停止')
+
+    def grab(self):
+        if self.closed:
+            raise RuntimeError('Capture is closed')
+        ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+        rect = self.guard._visible_client()
+        x, y, width, height = rect
+        if x < 0 or y < 0 or x+width > self.camera.width or y+height > self.camera.height:
+            raise RuntimeError('DXGI 遊戲已離開主螢幕；已停止')
+        deadline = self.clock()+self.fresh_timeout
+        while True:
+            if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
+                raise RuntimeError('F9 已停止 DXGI 等待；不會繼續輸入')
+            # Each call must acquire a NEW rendered frame. None never means
+            # permission to reuse a previously observed approach for input.
+            frame = self.camera.grab(region=(x, y, x+width, y+height),
+                                     copy=True, new_frame_only=True)
+            if self.guard._visible_client() != rect:
+                raise RuntimeError('擷取期間視窗位置或尺寸改變；已停止')
+            if frame is not None:
+                if frame.shape != (height, width, 3):
+                    raise RuntimeError('DXGI 畫面尺寸不吻合；已停止')
+                return frame
+            if self.clock() >= deadline:
+                raise NoFreshFrameError('DXGI 未取得新畫面；安全停止，不使用舊幀')
+            self.sleeper(.001)
+
+    def close(self):
+        if not self.closed:
+            try:
+                if self.camera is not None:
+                    self.camera.release()
+            finally:
+                self.guard.close()
+                self.closed = True
+
+
 class GameCapture:
     def __init__(self, hwnd, backend='screen'):
-        if backend not in ('screen', 'printwindow'):
+        if backend not in ('screen', 'printwindow', 'dxgi'):
             raise ValueError('Unknown capture backend')
         self.backend = backend
-        self.impl = ScreenCapture(hwnd) if backend == 'screen' else PrintWindowCapture(hwnd)
+        self.impl = {'screen': ScreenCapture, 'printwindow': PrintWindowCapture,
+                     'dxgi': DxgiCapture}[backend](hwnd)
 
     def grab(self):
         return self.impl.grab()
@@ -343,8 +418,9 @@ class StartupNavigator:
         self.used.add(name)
         self.last_seen = None
         self.confirmations = 0
-        if name == "play":
-            self.finished = True
+        # A play press can also be ignored during a Unity page transition.
+        # Seal only on observed gameplay, so its same-page retry remains
+        # bounded just like the other startup buttons.
 
     def seal(self) -> None:
         self.finished = True

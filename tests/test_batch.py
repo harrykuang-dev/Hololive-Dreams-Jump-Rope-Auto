@@ -16,7 +16,7 @@ def test_double_click_entry_defaults_to_seven(monkeypatch):
     with pytest.raises(SystemExit) as error:
         runpy.run_path(str(Path(runner.__file__).with_name('run_batch_test.py')), run_name='__main__')
     assert error.value.code == 0
-    assert calls == [{'default_rounds': 7}]
+    assert calls == [{'default_rounds': 7, 'default_capture': 'dxgi'}]
 
 
 @pytest.mark.parametrize('rounds', ['0', '8', '-1'])

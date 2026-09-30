@@ -70,8 +70,69 @@ def test_observation_mode_does_not_send_input():
     assert bot.tap_count == 0
 
 
+@pytest.mark.parametrize('f9', [False, True])
+def test_launch_banner_waits_without_input_and_keeps_f9(monkeypatch, f9):
+    calls = []
+    bot = JumpRopeBot(BotConfig(observe_only=True), sleeper=lambda _: None)
+
+    class Capture:
+        def __init__(self, _): pass
+        def grab(self):
+            calls.append(1)
+            if len(calls) < 3:
+                raise controller.TemporaryCaptureOverlayError('launch banner')
+            bot.stop()
+            return np.zeros((540, 960, 3), np.uint8)
+
+    monkeypatch.setattr(bot, 'focus_game', lambda: setattr(bot, '_hwnd', 123))
+    monkeypatch.setattr(controller, 'GameCapture', Capture)
+    monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow', lambda: 123)
+    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState',
+                        lambda _: 0x8000 if f9 and calls else 0)
+    monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('input under launch banner'))
+    bot.run()
+    assert bot.tap_count == 0
+    assert len(calls) == (1 if f9 else 3)
+    assert bot.stop_reason == ('F9' if f9 else 'stopped')
+
+
 def test_default_is_single_round_play():
     assert not JumpRopeBot().config.observe_only
+
+
+@pytest.mark.parametrize('outcome', ['fresh', 'timeout', 'F9', 'focus_lost', 'gameplay'])
+def test_static_loading_wait_is_bounded_and_never_reuses_pixels(monkeypatch, outcome):
+    now, calls = [0.], []
+    bot = JumpRopeBot(BotConfig(observe_only=True, wait_for_round=True,
+                                startup_timeout=.25, result_postroll=0),
+                      clock=lambda: now[0], sleeper=lambda t: now.__setitem__(0, now[0]+t))
+    class Capture:
+        def __init__(self, _): pass
+        def grab(self):
+            calls.append(1)
+            now[0] += .1
+            if outcome == 'gameplay' and len(calls) == 1:
+                return live_frame()
+            if outcome == 'fresh' and len(calls) == 2:
+                bot.stop()
+                return np.zeros_like(live_frame())
+            raise controller.NoFreshFrameError('no new pixels')
+    monkeypatch.setattr(bot, 'focus_game', lambda: setattr(bot, '_hwnd', 123))
+    monkeypatch.setattr(controller, 'GameCapture', Capture)
+    monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow',
+                        lambda: 456 if calls and outcome == 'focus_lost' else 123)
+    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState',
+                        lambda _: 0x8000 if calls and outcome == 'F9' else 0)
+    monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('input without pixels'))
+    if outcome == 'gameplay':
+        with pytest.raises(controller.NoFreshFrameError):
+            bot.run()
+    else:
+        bot.run()
+    assert bot.stop_reason == {'fresh': 'stopped', 'timeout': 'startup_timeout',
+                               'gameplay': 'error'}.get(outcome, outcome)
+    assert len(calls) == {'fresh': 2, 'timeout': 3, 'gameplay': 2}.get(outcome, 1)
+    assert bot.input_times == []
 
 
 def test_jump_position_is_derived_from_visible_button():

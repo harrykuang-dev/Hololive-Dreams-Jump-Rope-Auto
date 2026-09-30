@@ -98,7 +98,7 @@ def test_bounded_encoder_queue_never_silently_drops_frames(tmp_path, monkeypatch
 
     monkeypatch.setattr(module.cv2, 'VideoWriter', lambda *args: SlowWriter())
     frame = np.zeros((20, 20, 3), np.uint8)
-    recorder = RoundRecorder(tmp_path/'full.mp4', frame, queue_size=1)
+    recorder = RoundRecorder(tmp_path/'full.mp4', frame, queue_size=1, spill_bytes=0)
     args = dict(hud=True, ready=True, candidate=False, clicked=False, detector_score=0)
     try:
         recorder.add(frame, 0, **args)
@@ -188,3 +188,85 @@ def test_controller_checks_encoder_before_any_candidate_input(tmp_path, monkeypa
     with pytest.raises(RuntimeError, match='encoder failed'):
         bot.run()
     assert bot.tap_count == 0 and bot.stop_reason == 'error'
+
+
+@pytest.mark.parametrize('round_number', range(1, 8))
+def test_seven_round_spool_recovers_stall_and_keeps_exact_order(tmp_path, monkeypatch, round_number):
+    import round_recording as module
+    entered, resume = threading.Event(), threading.Event()
+    real_writer = cv2.VideoWriter
+
+    class PausedWriter:
+        def __init__(self, *args): self.writer = real_writer(*args)
+        def isOpened(self): return self.writer.isOpened()
+        def write(self, frame):
+            entered.set()
+            assert resume.wait(3)
+            self.writer.write(frame)
+        def release(self): self.writer.release()
+
+    monkeypatch.setattr(module.cv2, 'VideoWriter', PausedWriter)
+    frame = np.zeros((180, 320, 3), np.uint8)
+    recorder = RoundRecorder(tmp_path/f'round-{round_number}.mp4', frame, queue_size=2,
+                             spill_bytes=frame.nbytes*40)
+    args = dict(hud=True, ready=True, candidate=False, clicked=False, detector_score=0)
+    try:
+        recorder.add(frame, 0, **args)
+        assert entered.wait(2)
+        for i in range(1, 33):
+            frame[:] = i*7
+            recorder.add(frame, i/60, **args)
+        recorder.check_health()
+        assert recorder.spilled_frames == 30
+        assert recorder.memory_peak == 2
+    finally:
+        resume.set()
+        path = recorder.close(stop_reason='round_finished', tap_count=0,
+                              candidate_count=0, error=None)
+    log = json.loads(path.read_text(encoding='utf-8'))
+    assert log['encoding_complete'] and log['written_video_frames'] == 33
+    assert not recorder._worker.is_alive()
+    assert not recorder._spool_dir.exists()
+    cap = cv2.VideoCapture(str(recorder.path))
+    for i in range(33):
+        ok, decoded = cap.read()
+        assert ok and decoded.mean() == pytest.approx(i*7, abs=5)
+    assert not cap.read()[0]
+    cap.release()
+
+
+def test_spool_disk_full_stops_and_reports_incomplete_evidence(tmp_path, monkeypatch):
+    import round_recording as module
+    entered, resume = threading.Event(), threading.Event()
+    real_writer = cv2.VideoWriter
+
+    class PausedWriter:
+        def __init__(self, *args): self.writer = real_writer(*args)
+        def isOpened(self): return self.writer.isOpened()
+        def write(self, frame):
+            entered.set()
+            assert resume.wait(2)
+            self.writer.write(frame)
+        def release(self): self.writer.release()
+
+    monkeypatch.setattr(module.cv2, 'VideoWriter', PausedWriter)
+    frame = np.zeros((20, 20, 3), np.uint8)
+    recorder = RoundRecorder(tmp_path/'disk-full.mp4', frame, queue_size=1)
+    args = dict(hud=True, ready=True, candidate=False, clicked=False, detector_score=0)
+    try:
+        recorder.add(frame, 0, **args)
+        assert entered.wait(2)
+        recorder.add(frame, .02, **args)
+        monkeypatch.setattr(module.shutil, 'disk_usage', lambda _: type('Disk', (), {'free': 0})())
+        with pytest.raises(RuntimeError, match='空間不足'):
+            recorder.add(frame, .04, **args)
+        with pytest.raises(RuntimeError, match='空間不足'):
+            recorder.check_health()
+        assert len(recorder.frames) == 2
+    finally:
+        resume.set()
+        with pytest.raises(RuntimeError):
+            recorder.close(stop_reason='error', tap_count=0, candidate_count=0, error=None)
+    log = json.loads(recorder.path.with_suffix('.events.json').read_text(encoding='utf-8'))
+    assert log['stop_reason'] == 'recording_error'
+    assert not log['encoding_complete'] and '空間不足' in log['error']
