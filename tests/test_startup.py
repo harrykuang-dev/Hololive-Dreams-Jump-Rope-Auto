@@ -37,6 +37,8 @@ def test_startup_navigation_is_monotonic_and_one_shot():
         assert [navigator.observe(image) for _ in range(needed)] == [None] * (needed - 1) + [name]
         navigator.mark_clicked(name)
         assert all(navigator.observe(image) is None for _ in range(10))
+    assert not navigator.finished
+    navigator.seal()
     assert navigator.finished
     assert all(navigator.observe(frame("next")) is None for _ in range(10))
 
@@ -60,6 +62,19 @@ def test_ignored_event_next_click_gets_one_visual_retry_only():
     assert all(navigator.observe(image) is None for _ in range(30))
     navigator.seal()
     assert all(navigator.observe(frame("next")) is None for _ in range(30))
+
+
+def test_ignored_play_gets_one_retry_without_reopening_a_completed_round():
+    navigator = StartupNavigator(StartupScreen())
+    image = frame('play')
+    assert [navigator.observe(image) for _ in range(8)] == [None]*7+['play']
+    navigator.mark_clicked('play')
+    assert [navigator.observe(image) for _ in range(12)] == [None]*11+['play']
+    navigator.mark_clicked('play')
+    assert all(navigator.observe(image) is None for _ in range(30))
+    assert all(navigator.observe(frame('next')) is None for _ in range(30))
+    navigator.seal()
+    assert all(navigator.observe(image) is None for _ in range(30))
 
 
 def test_no_startup_click_after_round_entry_or_in_observe_mode(monkeypatch):

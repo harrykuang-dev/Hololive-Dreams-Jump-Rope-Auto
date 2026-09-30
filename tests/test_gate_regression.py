@@ -48,6 +48,23 @@ def test_two_weak_fragments_cannot_teleport_into_an_approach():
                    for i, (h, c) in enumerate(positions)]) == [.136]
 
 
+def test_v11_full_sequence_retains_occluded_crest_and_short_visible_apex():
+    source = Path(__file__).parent / 'fixtures' / 'gate' / 'v11-round-4.json'
+    events = replay(json.loads(source.read_text(encoding='utf-8'))['measurements'])
+    # Inspected MP4 losses at 100.064/118.091. A .119 crest was below the
+    # old .12 peak cutoff; three fresh far captures were sparsely sampled.
+    # Full sequence, without resetting the state before either failure.
+    assert [t for t in events if 99.75 <= t <= 100.0] == [99.8547]
+    assert [t for t in events if 117.70 <= t <= 118.0] == [117.8074]
+
+
+def test_dense_far_flash_has_insufficient_observed_duration_to_rearm():
+    positions = [(0, -.45, .8), (.06, -.36, .8), (.12, -.2, .8),
+                 (.13, -.43, .33), (.14, -.44, .46), (.15, -.45, .535),
+                 (.16, -.25, .8), (.17, -.10, .8)]
+    assert replay([(t, h, c, 'blue', .4) for t, h, c in positions]) == [.12]
+
+
 @pytest.mark.parametrize('round_number,windows', [
     (1, [(47.75, 47.95), (68.70, 68.90), (82.45, 82.65)]),
     (2, [(59.9, 60.15), (73.65, 73.85), (88.40, 88.65)]),

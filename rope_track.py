@@ -319,6 +319,8 @@ class VisualPassDetector:
         self.floor_dip_height = None
         self.floor_rebounded = False
         self.far_observations = deque(maxlen=5)
+        self.far_pixels = deque(maxlen=5)
+        self.floor_peak_observations = deque(maxlen=5)
         self.blue_rearm_needed = False
         self.blue_far_count = 0
         self.blue_saw_exit = False
@@ -353,6 +355,7 @@ class VisualPassDetector:
         else:
             self.blue_rearm_needed = True
             self.far_observations.clear()
+            self.far_pixels.clear()
             self.blue_far_count = 0
             self.blue_saw_exit = False
             self.blue_retreat_steps = 0
@@ -361,6 +364,7 @@ class VisualPassDetector:
         self.below_count = 0
 
     def _clear_gold_floor(self):
+        self.floor_peak_observations.clear()
         self.gold_high_count = 0
         self.gold_partial_high_count = 0
         self.gold_peak = False
@@ -446,6 +450,16 @@ class VisualPassDetector:
             # Do not let that weak, abrupt dip invent a trough whose return
             # would consume the only descending trigger of this swing.
             return False
+        # A partly covered plateau can stay just below .12 (v11 round 4).
+        # Require a sustained, coherent CURRENT visible crest, then retain
+        # the existing dip/rebound and descending-pass guards.
+        if self.context_tick:
+            self.floor_peak_observations.append((height, p.coverage))
+        crest = [h for h, c in self.floor_peak_observations
+                 if .105 <= h <= .18 and c >= .45]
+        if len(crest) >= 3 and max(crest)-min(crest) <= .025:
+            self.gold_peak = True
+            self.gold_peak_height = max(self.gold_peak_height or max(crest), max(crest))
         # Floor mode already requires shallow trajectory evidence. The same
         # glowing line can alternate white/blue/gold within a single swing.
         if height >= .12 and p.coverage >= .5:
@@ -521,6 +535,7 @@ class VisualPassDetector:
             self._clear_gold_floor()
             self.shallow_observations.clear()
             self.far_observations.clear()
+            self.far_pixels.clear()
             self.blue_rearm_needed = True
             self.blue_far_count = 0
             self.blue_saw_exit = False
@@ -564,11 +579,25 @@ class VisualPassDetector:
             self.gold_descending_used = False
             self.shallow_observations.clear()
             self.far_observations.clear()
+            self.far_pixels.clear()
             self._clear_gold_floor()
         self.last_time = now
         height = p.sag+p.offset
         self._update_gold_mode(p, height)
         if self.blue_rearm_needed:
+            # Use all fresh captures for a short occluded apex. Spacing is
+            # checked by its actual duration so dense two-frame prop flashes
+            # still cannot rearm, while three visible 30 Hz frames can.
+            self.far_pixels.append((now, height, p.coverage))
+            pixel_far = [(t, h, c) for t, h, c in self.far_pixels
+                         if h <= -.32 and c >= .28]
+            visible_apex = (len(pixel_far) >= 3
+                            and pixel_far[-1][0]-pixel_far[0][0] >= .045
+                            and sum(c >= .35 for _, _, c in pixel_far) >= 2
+                            and max(c for _, _, c in pixel_far) >= .5
+                            and max(h for _, h, _ in pixel_far)-min(h for _, h, _ in pixel_far) <= .16
+                            and not any(c >= .45 and h > -.25
+                                        for _, h, c in self.far_pixels))
             # Retain a short window across partial occlusion, but require
             # three coherent far measurements, two strong and one very
             # strong. Hue is not evidence of a new rotation.
@@ -613,7 +642,7 @@ class VisualPassDetector:
             # A short retreat to -.27 is not enough: two weak bowl/crowd
             # fits can masquerade as an immediate return. Require either a
             # clear far segment or a deeper, continuously observed retreat.
-            if self.blue_far_count < 3 and not coherent_far and not smooth_retreat and not self.gold_mode:
+            if self.blue_far_count < 3 and not coherent_far and not visible_apex and not smooth_retreat and not self.gold_mode:
                 self.last_reason = 'await_visible_retreat'
                 self.armed = False
                 self.below_count = 0
@@ -623,7 +652,7 @@ class VisualPassDetector:
                 self.partial_height = None
                 self._clear_gold_floor()
                 return False
-            if self.blue_far_count >= 3 or coherent_far or smooth_retreat:
+            if self.blue_far_count >= 3 or coherent_far or visible_apex or smooth_retreat:
                 # The three retreat samples themselves are the arming
                 # evidence. Preserve them if the next approach is occluded.
                 self.armed = True
@@ -632,6 +661,7 @@ class VisualPassDetector:
                 self.previous_height = height
             self.blue_rearm_needed = False
             self.far_observations.clear()
+            self.far_pixels.clear()
             self.blue_far_count = 0
             self.blue_saw_exit = False
             self.blue_retreat_steps = 0
