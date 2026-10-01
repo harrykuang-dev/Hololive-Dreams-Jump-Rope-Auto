@@ -128,3 +128,12 @@ def test_partial_single_frame_snap_cannot_change_mode_or_trigger():
     assert detector.last_reason == 'partial_geometry_snap'
     assert detector.position.sag == -.38
     assert feed(detector, -.26, .092, coverage=.85)
+
+
+def test_dense_two_weak_fragments_cannot_authorize_an_early_jump():
+    detector = VisualPassDetector()
+    assert not feed(detector, -.45, 0)
+    assert not feed(detector, -.42, .06)
+    assert not feed(detector, -.16, .076, coverage=.27)
+    assert not feed(detector, -.075, .092, coverage=.29)
+    assert feed(detector, -.15, .12, coverage=.8)

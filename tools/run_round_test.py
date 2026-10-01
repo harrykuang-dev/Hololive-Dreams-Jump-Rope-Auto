@@ -29,7 +29,8 @@ from vision import GameCapture, RoundGate, StartupScreen, NoFreshFrameError
 def wait_for_result_page(hwnd: int, *, timeout: float = 15.0,
                          clock=time.perf_counter, sleeper=time.sleep,
                          capture_factory=GameCapture,
-                         screen_factory=StartupScreen) -> bool:
+                         screen_factory=StartupScreen,
+                         stop_requested=lambda: False) -> bool:
     """Authorize a *new* round only from a stable previous score page."""
     capture = capture_factory(hwnd)
     screen = screen_factory()
@@ -37,7 +38,7 @@ def wait_for_result_page(hwnd: int, *, timeout: float = 15.0,
     confirmations = 0
     try:
         while clock() < deadline:
-            if (win32gui.GetForegroundWindow() != hwnd
+            if (stop_requested() or win32gui.GetForegroundWindow() != hwnd
                     or win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000):
                 return False
             try:

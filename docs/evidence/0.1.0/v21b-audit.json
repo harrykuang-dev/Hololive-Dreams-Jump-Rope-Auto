@@ -1,0 +1,90 @@
+{
+  "batch": "20261001-131611-073716",
+  "executable_sha256": "f1a64634f0fa70b6dbf57cbf2c0fea353f9aa09c5e728a06d3c0cdbcc3d8d00c",
+  "entry_point": "GUI",
+  "capture_backend": "dxgi",
+  "score_source": "Manually reviewed recorded game result frames; not input counts",
+  "rounds": [
+    {
+      "recording": "round-01.mp4",
+      "reviewed_game_score": 100,
+      "inputs": 101,
+      "frames": 6943,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 54.306462798510275
+    },
+    {
+      "recording": "round-02.mp4",
+      "reviewed_game_score": 79,
+      "inputs": 83,
+      "frames": 5953,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 54.74716471755646
+    },
+    {
+      "recording": "round-03.mp4",
+      "reviewed_game_score": 98,
+      "inputs": 106,
+      "frames": 6800,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 54.14197746020681
+    },
+    {
+      "recording": "round-04.mp4",
+      "reviewed_game_score": 76,
+      "inputs": 83,
+      "frames": 5684,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 54.41568812976032
+    },
+    {
+      "recording": "round-05.mp4",
+      "reviewed_game_score": 97,
+      "inputs": 102,
+      "frames": 6915,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 55.55251989873048
+    },
+    {
+      "recording": "round-06.mp4",
+      "reviewed_game_score": 89,
+      "inputs": 92,
+      "frames": 6392,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 55.193556447062186
+    },
+    {
+      "recording": "round-07.mp4",
+      "reviewed_game_score": 55,
+      "inputs": 59,
+      "frames": 4686,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 54.25888126071496
+    }
+  ],
+  "at_least_100": 1,
+  "minimum": 55,
+  "median": 89,
+  "frame_audit": "MP4 metadata count and final-frame decode; not full-file decode"
+}

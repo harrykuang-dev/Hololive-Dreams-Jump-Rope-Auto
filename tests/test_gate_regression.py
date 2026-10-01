@@ -17,6 +17,38 @@ def replay(positions):
     return events
 
 
+def test_v15_dense_floor_wobble_keeps_the_later_return():
+    source = Path(__file__).parent / 'fixtures' / 'gate' / 'v15-round-3.json'
+    events = replay(json.loads(source.read_text(encoding='utf-8'))['measurements'])
+    # The .009 rise in one ~22 ms capture was a plateau fitting wobble.
+    # Inspecting the first loss shows the later second crest and return.
+    assert not any(70.90 <= t <= 71.0 for t in events)
+    assert [t for t in events if 71.20 <= t <= 71.35] == [71.237]
+
+
+def test_v15_one_frame_weak_fragment_keeps_the_visible_reappearance():
+    source = Path(__file__).parent / 'fixtures' / 'gate' / 'v15-round-3.json'
+    events = replay(json.loads(source.read_text(encoding='utf-8'))['measurements'])
+    # Near the third loss, two weak prop fits 16 ms apart borrow the far
+    # rope's arming evidence. Wait for the actual visible reappearance.
+    assert not any(105.45 <= t <= 105.55 for t in events)
+    assert [t for t in events if 105.60 <= t <= 105.80] == [105.6222]
+
+
+def test_v15_partial_gold_crossing_survives_one_hidden_capture():
+    source = Path(__file__).parent / 'fixtures' / 'gate' / 'v15-round-3.json'
+    events = replay(json.loads(source.read_text(encoding='utf-8'))['measurements'])
+    assert [t for t in events if 86.25 <= t <= 86.50] == [86.3536]
+
+
+def test_v16_lone_partial_far_prop_cannot_erase_the_floor_return():
+    source = Path(__file__).parent / 'fixtures' / 'gate' / 'v16-round-1.json'
+    events = replay(json.loads(source.read_text(encoding='utf-8'))['measurements'])
+    # Strong visible floor descent was ignored until .054 because a single
+    # .385-coverage prop fit had switched mode to overhead.
+    assert [t for t in events if 84.70 <= t <= 84.95] == [84.8286]
+
+
 def test_v9_occluded_floor_dip_does_not_consume_the_later_return():
     source = Path(__file__).parent / 'fixtures' / 'gate' / 'v9-round-1.json'
     events = replay(json.loads(source.read_text(encoding='utf-8'))['measurements'])
