@@ -20,6 +20,7 @@
     "tools/run_round_test.py": "6c8534e2b04caa6ec584c15177a9e31c0916102fb89b7a11cd3214168dd00e53",
     "main_ui.py": "32c349978e2e62ce68b437f14b7a55c5aa3b9254faf7e6e01ae5adfd4e9dad8b"
   },
+  "source_hash_format": "UTF-8 text with CRLF normalized to LF",
   "bundled_resources_match": [
     "LICENSE",
     "third_party/fishing-auto-MIT.txt",

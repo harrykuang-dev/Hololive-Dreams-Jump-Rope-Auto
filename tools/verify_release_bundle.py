@@ -24,7 +24,10 @@ def verify(executable: Path, root: Path) -> dict:
         expected = compile(path.read_text(encoding='utf-8'), frozen.co_filename, 'exec', dont_inherit=True)
         if frozen != expected:
             raise ValueError(f'Frozen code differs from source: {name}')
-        sources[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+        # Git archives normalize tracked text to LF; source semantics are
+        # already compared above. Hash that canonical form, not checkout CRLF.
+        sources[path.relative_to(root).as_posix()] = hashlib.sha256(
+            path.read_text(encoding='utf-8').encode('utf-8')).hexdigest()
     if any(name == 'experiments' or name.startswith('experiments.') for name in modules.toc):
         raise ValueError('Archived candidate was accidentally bundled')
     resources = ['LICENSE', 'third_party/fishing-auto-MIT.txt', 'assets/jump-rope.ico']
@@ -41,6 +44,7 @@ def verify(executable: Path, root: Path) -> dict:
             'packages': {name: importlib.metadata.version(name) for name in
                          ('PyInstaller', 'pywin32', 'numpy', 'opencv-python', 'dxcam')},
             'compiled_source_matches': sources,
+            'source_hash_format': 'UTF-8 text with CRLF normalized to LF',
             'bundled_resources_match': resources,
             'archived_candidate_bundled': False,
             'scope': 'Static archive verification; does not launch or control the game'}
