@@ -16,7 +16,7 @@ import win32con
 
 
 class TemporaryCaptureOverlayError(RuntimeError):
-    """Computer Use's transient status banner still obstructs the client."""
+    """Computer Use's transient launch indicators still obstruct the client."""
 
 
 class NoFreshFrameError(RuntimeError):
@@ -100,7 +100,8 @@ class ScreenCapture:
                     if max(left, x) < min(right, x+width) and max(top, y) < min(bottom, y+height):
                         title = win32gui.GetWindowText(above)
                         error = (TemporaryCaptureOverlayError
-                                 if title == 'ChatGPT is using your computer. Esc to cancel'
+                                 if title in ('ChatGPT is using your computer. Esc to cancel',
+                                              'Codex Computer Use Cursor Overlay')
                                  else RuntimeError)
                         raise error(f'其他視窗覆蓋遊戲；高速擷取安全停止：{title!r}')
             above = win32gui.GetWindow(above, win32con.GW_HWNDPREV)
@@ -288,10 +289,13 @@ class RoundGate:
             return False
         normalized = cv2.resize(frame, (960, 540))
         hearts = cv2.inRange(cv2.cvtColor(normalized[190:235, 55:155], cv2.COLOR_BGR2HSV), (35, 100, 130), (85, 255, 255))
-        jump = cv2.inRange(cv2.cvtColor(normalized[375:490, 750:895], cv2.COLOR_BGR2HSV), (20, 100, 180), (42, 255, 255))
+        button = cv2.cvtColor(normalized[375:490, 750:895], cv2.COLOR_BGR2HSV)
+        jump = cv2.inRange(button, (20, 100, 180), (42, 255, 255))
+        blue_button = cv2.inRange(button, (85, 80, 80), (125, 255, 255))
         score = cv2.inRange(cv2.cvtColor(normalized[45:125, 35:155], cv2.COLOR_BGR2HSV), (0, 0, 210), (180, 65, 255))
         return (np.count_nonzero(hearts) >= 70
                 and np.count_nonzero(jump) >= 250
+                and np.count_nonzero(blue_button) >= 200
                 and np.count_nonzero(score) >= 100)
 
     def observe(self, frame: np.ndarray) -> bool:

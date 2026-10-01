@@ -11,6 +11,7 @@ from rope_track import VisualPassDetector, RopePosition
 def live_frame():
     frame = np.zeros((540, 960, 3), dtype=np.uint8)
     cv2.rectangle(frame, (65, 200), (85, 220), (0, 255, 70), -1)
+    cv2.rectangle(frame, (790, 390), (850, 460), (255, 90, 0), -1)
     cv2.rectangle(frame, (800, 400), (840, 450), (0, 240, 255), -1)
     cv2.putText(frame, '20', (45, 105), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5)
     cv2.fillConvexPoly(frame, np.array([[540, 193], [532, 205], [548, 205]]), (0, 240, 255))
@@ -100,6 +101,39 @@ def test_default_is_single_round_play():
     assert not JumpRopeBot().config.observe_only
 
 
+@pytest.mark.parametrize('startup_timeout,first_frame,expected_wait', [
+    (120, False, 60), (2, False, 2), (120, True, 0),
+])
+def test_launch_overlay_deadline_and_no_wait_after_first_frame(
+        monkeypatch, startup_timeout, first_frame, expected_wait):
+    now, calls = [0.], []
+    bot = JumpRopeBot(BotConfig(observe_only=True, startup_timeout=startup_timeout),
+                      clock=lambda: now[0],
+                      sleeper=lambda _: now.__setitem__(0, now[0]+1))
+
+    class Capture:
+        def __init__(self, _): pass
+        def grab(self):
+            calls.append(1)
+            if first_frame and len(calls) == 1:
+                return live_frame()
+            raise controller.TemporaryCaptureOverlayError('launch banner')
+
+    monkeypatch.setattr(bot, 'focus_game', lambda: setattr(bot, '_hwnd', 123))
+    monkeypatch.setattr(controller, 'GameCapture', Capture)
+    monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow', lambda: 123)
+    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState', lambda _: 0)
+    monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('overlay authorized input'))
+    with pytest.raises(controller.TemporaryCaptureOverlayError, match='launch banner'):
+        bot.run()
+    # A successfully captured frame sleeps once; the following overlay must
+    # stop immediately rather than granting another startup waiting window.
+    assert now[0] == expected_wait + int(first_frame)
+    assert len(calls) == (2 if first_frame else expected_wait+1)
+    assert bot.stop_reason == 'error'
+    assert bot.tap_count == 0
+
+
 @pytest.mark.parametrize('outcome', ['fresh', 'timeout', 'F9', 'focus_lost', 'gameplay'])
 def test_static_loading_wait_is_bounded_and_never_reuses_pixels(monkeypatch, outcome):
     now, calls = [0.], []
@@ -124,14 +158,10 @@ def test_static_loading_wait_is_bounded_and_never_reuses_pixels(monkeypatch, out
     monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState',
                         lambda _: 0x8000 if calls and outcome == 'F9' else 0)
     monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('input without pixels'))
-    if outcome == 'gameplay':
-        with pytest.raises(controller.NoFreshFrameError):
-            bot.run()
-    else:
-        bot.run()
+    bot.run()
     assert bot.stop_reason == {'fresh': 'stopped', 'timeout': 'startup_timeout',
-                               'gameplay': 'error'}.get(outcome, outcome)
-    assert len(calls) == {'fresh': 2, 'timeout': 3, 'gameplay': 2}.get(outcome, 1)
+                               'gameplay': 'startup_timeout'}.get(outcome, outcome)
+    assert len(calls) == {'fresh': 2, 'timeout': 3, 'gameplay': 3}.get(outcome, 1)
     assert bot.input_times == []
 
 
@@ -140,6 +170,43 @@ def test_jump_position_is_derived_from_visible_button():
     assert x == pytest.approx(820/960, abs=.005)
     assert y == pytest.approx(425/540, abs=.005)
     assert RoundGate.jump_position(np.zeros((540, 960, 3), np.uint8)) is None
+
+
+def test_loading_tip_with_hud_like_colors_does_not_seal_gameplay():
+    from pathlib import Path
+    frame = cv2.imread(str(Path(__file__).parent/'fixtures/loading-tip-false-hud.jpg'))
+    assert frame is not None
+    assert not RoundGate.gameplay_visible(frame)
+
+
+@pytest.mark.parametrize('visible_rope', [False, True])
+def test_initial_static_hud_wait_is_bounded_and_ends_after_rope_evidence(monkeypatch, visible_rope):
+    now, calls = [0.], []
+    bot = JumpRopeBot(BotConfig(observe_only=True, wait_for_round=True,
+                                startup_timeout=10, result_postroll=0),
+                      clock=lambda: now[0], sleeper=lambda t: now.__setitem__(0, now[0]+t))
+    class Capture:
+        def __init__(self, _): pass
+        def grab(self):
+            calls.append(1)
+            now[0] += .1
+            if len(calls) <= 3:
+                return live_frame()
+            raise controller.NoFreshFrameError('no new pixels')
+    class Detector:
+        position = RopePosition(0, .9 if visible_rope else 0, 0)
+        last_score = 0
+        def observe(self, _frame, _now): return False
+    monkeypatch.setattr(bot, 'focus_game', lambda: setattr(bot, '_hwnd', 123))
+    monkeypatch.setattr(controller, 'GameCapture', Capture)
+    monkeypatch.setattr(controller, 'VisualPassDetector', Detector)
+    monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow', lambda: 123)
+    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState', lambda _: 0)
+    monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('input without pixels'))
+    with pytest.raises(controller.NoFreshFrameError):
+        bot.run()
+    assert len(calls) == 4 if visible_rope else 30 <= len(calls) <= 32
+    assert bot.tap_count == 0
 
 
 def measured_detector(positions):

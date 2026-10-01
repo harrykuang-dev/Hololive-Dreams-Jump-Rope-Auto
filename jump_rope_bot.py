@@ -64,12 +64,14 @@ class JumpRopeBot:
 
     def __init__(self, config: BotConfig | None = None, *,
                  clock: Callable[[], float] = time.perf_counter,
-                 sleeper: Callable[[float], None] = time.sleep) -> None:
+                 sleeper: Callable[[float], None] = time.sleep,
+                 stop_requested: Callable[[], bool] | None = None) -> None:
         self.config = config or BotConfig()
         self.config.validate()
         self._clock = clock
         self._sleep = sleeper
         self._stop = threading.Event()
+        self._external_stop = stop_requested or (lambda: False)
         self._running = threading.Event()
         self._thread: threading.Thread | None = None
         self._hwnd: int | None = None
@@ -88,6 +90,9 @@ class JumpRopeBot:
     @property
     def running(self) -> bool:
         return self._running.is_set()
+
+    def _stopped(self) -> bool:
+        return self._stop.is_set() or self._external_stop()
 
     def find_game(self) -> int:
         hwnd = win32gui.FindWindow(self.config.window_class, self.config.window_title)
@@ -136,7 +141,7 @@ class JumpRopeBot:
             return False
         if not self._hwnd:
             raise GameNotFoundError("遊戲視窗已關閉。")
-        if self._stop.is_set() or win32gui.GetForegroundWindow() != self._hwnd:
+        if self._stopped() or win32gui.GetForegroundWindow() != self._hwnd:
             self.stop()
             return False
         if not RoundGate.gameplay_visible(frame) or not RoundGate.player_ready(frame):
@@ -165,7 +170,7 @@ class JumpRopeBot:
     def tap_startup(self, action: str, frame, screen: StartupScreen) -> bool:
         """One pre-round menu click; this path is disabled after round entry."""
         if (self.config.observe_only or not self.config.auto_start
-                or self.round_started_at is not None or self._stop.is_set()
+                or self.round_started_at is not None or self._stopped()
                 or not self._hwnd or win32gui.GetForegroundWindow() != self._hwnd
                 or screen.identify(frame) != action):
             return False
@@ -188,7 +193,7 @@ class JumpRopeBot:
     def _result_tail_allowed(self) -> bool:
         # A stop during the non-input recording tail must also cancel the
         # batch runner's permission to open the next round.
-        if self._stop.is_set():
+        if self._stopped():
             self.stop_reason = 'stopped'
             return False
         if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
@@ -214,6 +219,8 @@ class JumpRopeBot:
         recorder: RoundRecorder | None = None
         postroll_done = False
         try:
+            if self._stopped():
+                return
             self.focus_game()
             detector = VisualPassDetector()
             gate = RoundGate()
@@ -226,7 +233,9 @@ class JumpRopeBot:
             last_report = started
             captured_once = False
             gameplay_seen = False
-            while not self._stop.is_set():
+            first_hud_at = None
+            rope_evidence_seen = False
+            while not self._stopped():
                 loop_started = self._clock()
                 if recorder is not None:
                     recorder.check_health()
@@ -240,18 +249,27 @@ class JumpRopeBot:
                 try:
                     frame = capture.grab()
                 except TemporaryCaptureOverlayError:
-                    # The launch action's banner can outlive process startup.
+                    # The launch action's banner/cursor can outlive startup.
                     # Before the FIRST pixel capture only, await its removal
-                    # for at most 20s. No frame or input is authorized under it.
+                    # for at most 60s (and within the startup deadline). GUI
+                    # clicks can leave the indicator up longer than launches.
+                    # No frame or input is authorized under it.
                     # A banner during gameplay still immediately stops the bot.
-                    if captured_once or self._clock()-started >= 20:
+                    if captured_once or self._clock()-started >= min(60, self.config.startup_timeout):
                         raise
                     self._sleep(.05)
                     continue
                 except NoFreshFrameError:
-                    # Loading screens may be static. Await new pixels only
-                    # before any live HUD, within the existing startup bound.
-                    if gameplay_seen or not self.config.wait_for_round:
+                    # The first HUD can precede the animated rope. Allow at
+                    # most 3s of initial static countdown, before ANY reliable
+                    # rope or candidate/input. No cached frame is processed.
+                    # Once tracking begins, a missing new frame still stops.
+                    countdown_wait = (first_hud_at is not None
+                        and self._clock()-first_hud_at < 3
+                        and not rope_evidence_seen and self.candidate_count == 0
+                        and self.tap_count == 0)
+                    if ((gameplay_seen and not countdown_wait)
+                            or not self.config.wait_for_round):
                         raise
                     if self._clock()-started >= self.config.startup_timeout:
                         self.stop_reason = 'startup_timeout'
@@ -264,7 +282,10 @@ class JumpRopeBot:
                     recorder = RoundRecorder(self.config.record_path, frame, fps=self.config.target_fps)
                 gate_started = self._clock()
                 allowed = gate.observe(frame)
-                gameplay_seen = gameplay_seen or RoundGate.gameplay_visible(frame)
+                visible = RoundGate.gameplay_visible(frame)
+                if visible and first_hud_at is None:
+                    first_hud_at = now
+                gameplay_seen = gameplay_seen or visible
                 # Even one live-HUD frame permanently disables startup clicks.
                 # This covers a very short round that ends before the gate's
                 # three-frame confirmation can latch.
@@ -359,6 +380,8 @@ class JumpRopeBot:
                     continue
                 detector_started = self._clock()
                 candidate = detector.observe(frame, now)
+                rope_evidence_seen = (rope_evidence_seen
+                                      or getattr(detector.position, 'coverage', 0) >= .35)
                 timing['detector_ms'] = round((self._clock()-detector_started)*1000, 3)
                 measured = True
                 if candidate:

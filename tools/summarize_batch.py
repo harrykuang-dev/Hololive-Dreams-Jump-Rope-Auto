@@ -13,7 +13,8 @@ def main():
     args = parser.parse_args()
     prefix = Path(args.prefix)
     tiles = []
-    for path in sorted(prefix.parent.glob(prefix.name+'*.events.json')):
+    paths = prefix.glob('round-*.events.json') if prefix.is_dir() else prefix.parent.glob(prefix.name+'*.events.json')
+    for path in sorted(paths):
         data = json.loads(path.read_text(encoding='utf8'))
         assert data.get('encoding_complete', True)
         cap = cv2.VideoCapture(str(path.with_suffix('').with_suffix('.mp4')))
@@ -23,7 +24,8 @@ def main():
         cap.release()
         assert ok
         tile = cv2.resize(frame, (640, 360))
-        cv2.putText(tile, path.stem[-15:], (10, 24), 0, .6, (0, 0, 0), 2)
+        round_number = path.name.split('round-')[-1].split('.')[0]
+        cv2.putText(tile, f'Round {round_number}', (10, 24), 0, .6, (0, 0, 0), 2)
         tiles.append(tile)
         result = next((r['t'] for r in data['frames'] if r['phase'] == 'result'), None)
         print(path.name, 'inputs=', len(data['input_times']), 'after_result=',

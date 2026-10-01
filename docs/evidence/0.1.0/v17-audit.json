@@ -1,0 +1,89 @@
+{
+  "batch": "batch-test-20261001-005657-772736",
+  "executable_sha256": "99e63ba1d2cfe058b130a2e08f069bfe29a8a9b4f51eddaa6ac54700045ec99b",
+  "capture_backend": "dxgi",
+  "score_source": "Manually reviewed recorded game result frames; not input counts",
+  "rounds": [
+    {
+      "recording": "batch-test-20261001-005657-772736-round-01.mp4",
+      "reviewed_game_score": 61,
+      "inputs": 65,
+      "frames": 5026,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.36471231868849
+    },
+    {
+      "recording": "batch-test-20261001-005657-772736-round-02.mp4",
+      "reviewed_game_score": 88,
+      "inputs": 94,
+      "frames": 6237,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.54363642983916
+    },
+    {
+      "recording": "batch-test-20261001-005657-772736-round-03.mp4",
+      "reviewed_game_score": 71,
+      "inputs": 78,
+      "frames": 5501,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.35731350839289
+    },
+    {
+      "recording": "batch-test-20261001-005657-772736-round-04.mp4",
+      "reviewed_game_score": 95,
+      "inputs": 97,
+      "frames": 6550,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.970942709142996
+    },
+    {
+      "recording": "batch-test-20261001-005657-772736-round-05.mp4",
+      "reviewed_game_score": 95,
+      "inputs": 100,
+      "frames": 6606,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.59069035095495
+    },
+    {
+      "recording": "batch-test-20261001-005657-772736-round-06.mp4",
+      "reviewed_game_score": 87,
+      "inputs": 91,
+      "frames": 6204,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.61100797695796
+    },
+    {
+      "recording": "batch-test-20261001-005657-772736-round-07.mp4",
+      "reviewed_game_score": 115,
+      "inputs": 122,
+      "frames": 7105,
+      "stop_reason": "round_finished",
+      "encoding_complete": true,
+      "inputs_after_result": 0,
+      "menus_after_start": 0,
+      "actual_fps": 53.49868603272641
+    }
+  ],
+  "at_least_100": 1,
+  "minimum": 61,
+  "median": 88,
+  "frame_audit": "MP4 metadata count and final-frame decode; not full-file decode"
+}

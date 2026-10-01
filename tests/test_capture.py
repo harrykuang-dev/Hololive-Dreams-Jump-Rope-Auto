@@ -50,6 +50,15 @@ def test_hidden_virtual_desktop_window_is_not_a_visible_overlay(desktop):
     assert vision.ScreenCapture(123)._visible_client() == (100, 100, 100, 80)
 
 
+@pytest.mark.parametrize('title', ['ChatGPT is using your computer. Esc to cancel',
+                                 'Codex Computer Use Cursor Overlay'])
+def test_launch_indicator_is_transient_error_not_capture_permission(desktop, monkeypatch, title):
+    desktop.above = 456
+    monkeypatch.setattr(vision.win32gui, 'GetWindowText', lambda _: title)
+    with pytest.raises(vision.TemporaryCaptureOverlayError):
+        vision.ScreenCapture(123)._visible_client()
+
+
 def test_buffers_reused_frames_owned_resize_and_close_release(desktop, monkeypatch):
     counts = {'allocate': 0, 'delete': 0, 'release': 0, 'blit': 0}
     state = {'rect': (10, 20, 4, 2)}
