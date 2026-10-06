@@ -13,9 +13,35 @@ from PyInstaller.archive.readers import CArchiveReader
 import win32api
 
 
+def verify_research_boundary(module_names, archive_names) -> None:
+    """Research remains local; shipped assets are explicitly named UI assets."""
+    research_modules = {'unitypy', 'octodb_pb2', 'crypto_utils', 'extractor',
+                        'classification', 'manifest', 'downloader',
+                        'audio_converter', 'media_converter', 'cridecoder',
+                        'wannacri', 'capstone', 'crypto'}
+    for name in module_names:
+        if (name.split('.', 1)[0].lower() in research_modules
+                or name.lower() == 'google.protobuf'
+                or name.lower().startswith('google.protobuf.')):
+            raise ValueError(f'Research dependency was accidentally bundled: {name}')
+    ui_assets = {'assets/jump-rope.ico', 'assets/startup/next.png',
+                 'assets/startup/ok.png', 'assets/startup/play.png'}
+    for name in archive_names:
+        normalized = name.replace('\\', '/').lower()
+        parts = normalized.split('/')
+        if 'work' in parts or 'hololive-toolkit-research' in parts:
+            raise ValueError(f'Local research file was accidentally bundled: {name}')
+        if normalized.startswith('assets/') and normalized not in ui_assets:
+            raise ValueError(f'Unapproved product asset was bundled: {name}')
+        if (normalized.endswith(('.unity3d', '.assetbundle', '.fbx', '.acb', '.awb', '.usm'))
+                or parts[-1] in {'gameassembly.dll', 'global-metadata.dat', 'octocacheevai'}):
+            raise ValueError(f'Game resource was accidentally bundled: {name}')
+
+
 def verify(executable: Path, root: Path) -> dict:
     archive = CArchiveReader(str(executable))
     modules = archive.open_embedded_archive('PYZ.pyz')
+    verify_research_boundary(modules.toc, archive.toc)
     sources = {}
     for name in ('app_locale', 'app_settings', 'batch_session', 'jump_rope_bot',
                  'rope_track', 'vision', 'tools.run_round_test', 'main_ui'):
@@ -31,7 +57,7 @@ def verify(executable: Path, root: Path) -> dict:
     if any(name == 'experiments' or name.startswith('experiments.') for name in modules.toc):
         raise ValueError('Archived candidate was accidentally bundled')
     resources = ['LICENSE', 'third_party/fishing-auto-MIT.txt', 'assets/jump-rope.ico']
-    resources.extend(path.relative_to(root).as_posix() for path in sorted((root/'assets/startup').glob('*')) if path.is_file())
+    resources.extend(f'assets/startup/{name}.png' for name in ('next', 'ok', 'play'))
     for name in resources:
         if archive.extract(name.replace('/', '\\')) != (root/name).read_bytes():
             raise ValueError(f'Bundled resource differs from source: {name}')
@@ -47,6 +73,8 @@ def verify(executable: Path, root: Path) -> dict:
             'source_hash_format': 'UTF-8 text with CRLF normalized to LF',
             'bundled_resources_match': resources,
             'archived_candidate_bundled': False,
+            'research_boundary_check_passed': True,
+            'research_boundary_scope': 'Module denylist, game resource extensions, local research paths and explicit UI asset allowlist; not a semantic inspection of every dependency byte',
             'scope': 'Static archive verification; does not launch or control the game'}
 
 

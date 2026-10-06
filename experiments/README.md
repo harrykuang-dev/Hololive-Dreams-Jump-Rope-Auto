@@ -9,3 +9,11 @@ on v18b. The released `rope_track.py` therefore uses the verified v18b gate.
 Raw measurement fixtures remain available to reproduce the archived findings;
 offline candidate events are not game scores. See
 [`docs/optimization-0.1.0.md`](../docs/optimization-0.1.0.md).
+
+`rope_track_v23.py` preserves the October 2026 screenshot-only surface-filter
+candidate. It rejects broad colored ridges while retaining neutral rope glow;
+its synthetic contracts live in `tests/test_archived_surface_filter.py`.
+It contains no unpacked game assets or animation data and is not imported or
+bundled by the application. Candidate trial results are documented in
+[`docs/visual-research-2026-10.md`](../docs/visual-research-2026-10.md);
+do not interpret a synthetic pass or an offline event as a live score.
