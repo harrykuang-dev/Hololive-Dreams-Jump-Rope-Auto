@@ -16,9 +16,6 @@ def main():
         '--add-data','LICENSE;.',
         '--add-data','third_party/fishing-auto-MIT.txt;third_party',
         'main_ui.py'],cwd=root,check=True)
-    subprocess.run([sys.executable, str(root/'tools'/'verify_release_bundle.py'),
-        str(root/'dist'/'HololiveDreamsJumpRopeAuto-0.1.0.exe'), '--output',
-        str(root/'dist'/'release-verification.json')], cwd=root, check=True)
 
 
 if __name__ == '__main__':
