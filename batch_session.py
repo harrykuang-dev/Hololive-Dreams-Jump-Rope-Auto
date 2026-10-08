@@ -17,10 +17,10 @@ import winerror
 
 from app_settings import parse_stop_hotkey
 from jump_rope_bot import BotConfig, JumpRopeBot
-from tools.run_round_test import wait_for_result_page
+from session_flow import wait_for_result_page
 from vision import GameCapture
 
-APP_VERSION = '0.1.0'
+APP_VERSION = '0.2.0'
 LOG = logging.getLogger('jump-rope-auto')
 
 
@@ -36,8 +36,8 @@ class SessionConfig:
     observe_only: bool = False
 
     def validate(self):
-        if type(self.rounds) is not int or not 1 <= self.rounds <= 7:
-            raise ValueError('Round limit must be an integer from 1 to 7')
+        if type(self.rounds) is not int or not 1 <= self.rounds <= 999:
+            raise ValueError('Round limit must be an integer from 1 to 999')
         if self.observe_only and self.rounds != 1:
             raise ValueError('Observation is limited to one manually started round')
         parse_stop_hotkey(self.stop_hotkey)
@@ -92,6 +92,8 @@ class BatchSession:
                 self.directory.mkdir(parents=True, exist_ok=False)
                 executable = Path(sys.executable) if getattr(sys, 'frozen', False) else None
                 manifest = {'app_version': APP_VERSION, 'round_limit': self.config.rounds,
+                            'baseline': 'V27', 'key_down_ms': 25,
+                            'startup_recognizer': 'pill_geometry_v1',
                             'capture_backend': 'dxgi', 'target_fps': 60,
                             'observe_only': self.config.observe_only,
                             'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest() if executable else None}
@@ -111,20 +113,36 @@ class BatchSession:
                     record_path=path, observe_only=self.config.observe_only,
                     wait_for_round=True, auto_start=not self.config.observe_only,
                     capture_backend='dxgi', target_fps=60, startup_timeout=120,
+                    key_down_time=.025, diagnostics_enabled=self.config.diagnostics,
                     round_timeout=10 if self.config.observe_only else 180,
                     result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped)
                 with self._count_lock:
                     self.current_bot = bot
-                bot.run()
-                self.stop_reason = bot.stop_reason
-                # The UI must never briefly count this finished bot twice.
-                with self._count_lock:
-                    self.completed_inputs += bot.tap_count
-                    self.current_bot = None
-                finished = bot.stop_reason == 'round_finished' and bot.round_started_at is not None
-                if finished:
-                    self.completed_rounds += 1
-                self.notify('round_done', (index, bot.stop_reason, bot.tap_count))
+                try:
+                    bot.run()
+                finally:
+                    self.stop_reason = bot.stop_reason
+                    # Clear the bot before packaging, so an encoder failure
+                    # cannot double-count inputs or leave the UI at an old round.
+                    with self._count_lock:
+                        self.completed_inputs += bot.tap_count
+                        self.current_bot = None
+                    finished = bot.stop_reason == 'round_finished' and bot.round_started_at is not None
+                    if finished:
+                        self.completed_rounds += 1
+                    self.notify('round_done', (index, bot.stop_reason, bot.tap_count))
+                    recorder = getattr(bot, 'diagnostic_recorder', None)
+                    if recorder is not None and hasattr(recorder, 'result'):
+                        self.notify('packing', index)
+                        if handler:
+                            handler.flush()
+                            (recorder.directory / 'session.log').write_bytes((self.directory / 'session.log').read_bytes()[-1024*1024:])
+                            (recorder.directory / 'session.json').write_bytes((self.directory / 'session.json').read_bytes())
+                        archive = recorder.package({
+                            'performance': getattr(bot, 'basic_performance', {}),
+                            'input_pulses': getattr(bot, 'input_pulses', []),
+                            'app_version': APP_VERSION, 'baseline': 'V27'})
+                        self.notify('archive', str(archive))
                 if not finished or index == self.config.rounds or self._stopped():
                     if self._stopped():
                         self.stop_reason = 'stopped'
@@ -134,8 +152,20 @@ class BatchSession:
                     self.stop_reason = 'result_not_confirmed'
                     break
             self.notify('finished', self.stop_reason)
+        except Exception:
+            self.stop_reason = 'error'
+            raise
         finally:
-            if handler:
-                LOG.removeHandler(handler)
-                handler.close()
-            win32api.CloseHandle(mutex)
+            try:
+                if self.directory:
+                    (self.directory / 'summary.json').write_text(json.dumps({
+                        'app_version': APP_VERSION, 'baseline': 'V27',
+                        'completed_rounds': self.completed_rounds,
+                        'round_limit': self.config.rounds, 'inputs': self.inputs,
+                        'stop_reason': self.stop_reason,
+                    }, indent=2), encoding='utf-8')
+            finally:
+                if handler:
+                    LOG.removeHandler(handler)
+                    handler.close()
+                win32api.CloseHandle(mutex)

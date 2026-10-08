@@ -179,7 +179,8 @@ def test_controller_checks_encoder_before_any_candidate_input(tmp_path, monkeypa
     bot = JumpRopeBot(BotConfig(record_path=tmp_path/'guard.mp4', result_postroll=0))
     monkeypatch.setattr(bot, 'focus_game', lambda: setattr(bot, '_hwnd', 123))
     monkeypatch.setattr(controller, 'GameCapture', Capture)
-    monkeypatch.setattr(controller, 'RoundRecorder', Recorder)
+    import diagnostics
+    monkeypatch.setattr(diagnostics, 'RoundDiagnostics', Recorder)
     monkeypatch.setattr(controller, 'VisualPassDetector', Detector)
     monkeypatch.setattr(controller.RoundGate, 'observe', lambda *args: True)
     monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow', lambda: 123)

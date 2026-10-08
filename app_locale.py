@@ -132,5 +132,66 @@ for language, reasons in REASONS.items():
     TEXT[language].update({'reason_'+key:value for key,value in reasons.items()})
 
 
+V27_TEXT = {
+    'zh-TW': {
+        'round_hint':'1–999 局；每次開始都重新計數。', 'start_shortcut':'開始快捷鍵',
+        'diagnostics':'開發者模式（記錄＋診斷圖）', 'footer':'V27 · 25ms · 僅依據畫面操作',
+        'invalid':'局數須為 1–999，快捷鍵須有效；只觀察模式限單局。',
+        'help':'開發者模式保存完整逐幀判定、按鍵時間、原圖與繩線診斷圖，並保留掉心及結束前後的密集截圖，不錄影。每局結束後自動產生不超過 20MiB 的 diagnostics.zip，可附在 GitHub Issue。資料僅儲存在本機；分享前請檢查截圖。\n\n畫面以 960×540 保存，影像壓縮在本局控制結束後執行。關閉模式後不啟用診斷模組、不保存畫面。\n\n開始快捷鍵預設 F8，F9 始終停止。零能量仍可遊玩。計數為起跳輸入，成績請看遊戲結算頁。',
+        'packing':'正在打包第 {index} 局診斷…', 'archive':'可附 Issue 的診斷ZIP：{path}',
+        'hotkey_error':'無法註冊 {key}；請更換開始快捷鍵，或使用開始按鈕。',
+        'reason_recording_error':'診斷保存失敗',
+    },
+    'zh-CN': {
+        'round_hint':'1–999 局；每次开始都重新计数。', 'start_shortcut':'开始快捷键',
+        'diagnostics':'开发者模式（记录＋诊断图）', 'footer':'V27 · 25ms · 仅依据画面操作',
+        'invalid':'局数须为 1–999，快捷键须有效；只观察模式限单局。',
+        'help':'开发者模式保存完整逐帧判定、按键时间、原图与绳线诊断图，并保留掉心及结束前后的密集截图，不录像。每局结束后自动生成不超过 20MiB 的 diagnostics.zip，可附在 GitHub Issue。资料仅保存在本机；分享前请检查截图。\n\n画面以 960×540 保存，图像压缩在本局控制结束后执行。关闭模式后不启用诊断模块、不保存画面。\n\n开始快捷键默认 F8，F9 始终停止。零能量仍可游玩。计数为起跳输入，成绩请看游戏结算页。',
+        'packing':'正在打包第 {index} 局诊断…', 'archive':'可附 Issue 的诊断ZIP：{path}',
+        'hotkey_error':'无法注册 {key}；请更换开始快捷键，或使用开始按钮。',
+        'reason_recording_error':'诊断保存失败',
+    },
+    'en': {
+        'round_hint':'1–999 rounds; each start resets the count.', 'start_shortcut':'Start shortcut',
+        'diagnostics':'Developer mode (trace + diagnostic images)', 'footer':'V27 · 25ms · Visual input only',
+        'invalid':'Use 1–999 rounds and a valid shortcut. Observation requires one round.',
+        'help':'Developer mode saves all frame decisions, input timing, raw/rope-overlay screenshots and dense frames around heart loss and round end. No video. Each round creates diagnostics.zip, at most 20 MiB, for a GitHub issue. Files stay local; review screenshots before sharing.\n\nImages are 960×540 and compressed after control ends. Disabled mode does not activate diagnostic modules or save images.\n\nDefault start: F8. F9 always stops. Zero energy can play. The counter shows jump inputs; read the score on the game result page.',
+        'packing':'Packaging round {index} diagnostics…', 'archive':'Issue attachment ZIP: {path}',
+        'hotkey_error':'Could not register {key}; choose another start shortcut or use the Start button.',
+        'reason_recording_error':'diagnostic save failed',
+    },
+    'ja': {
+        'round_hint':'1–999 回。開始ごとにカウントをリセット。', 'start_shortcut':'開始ショートカット',
+        'diagnostics':'開発者モード（記録＋診断画像）', 'footer':'V27 · 25ms · 画面からの操作のみ',
+        'invalid':'回数は 1–999、有効なキーを指定してください。観察は1回のみ。',
+        'help':'全フレームの判定、入力時刻、元画像と縄の診断画像、ハート減少と終了前後の連続画像を保存します。動画は保存しません。各回終了後20 MiB以下のdiagnostics.zipを作成します。自動アップロードはありません。共有前に画像を確認してください。\n\n画像は960×540。圧縮は制御終了後に行います。無効時は診断処理を起動しません。\n\n開始キーはF8、F9は常に停止。エネルギー0でもプレイできます。得点はゲームの結果画面で確認してください。',
+        'packing':'第 {index} 回の診断を作成中…', 'archive':'Issue 添付用ZIP：{path}',
+        'hotkey_error':'{key} を登録できません。別の開始キーか開始ボタンを使ってください。',
+        'reason_recording_error':'診断保存失敗',
+    },
+    'ko': {
+        'round_hint':'1–999 라운드. 시작할 때마다 집계를 초기화합니다.', 'start_shortcut':'시작 단축키',
+        'diagnostics':'개발자 모드 (기록 + 진단 이미지)', 'footer':'V27 · 25ms · 화면 기반 입력',
+        'invalid':'1–999 라운드와 유효한 키를 입력하세요. 관찰은 한 라운드만 가능합니다.',
+        'help':'모든 프레임 판정, 입력 시간, 원본/줄 진단 이미지와 하트 감소 및 종료 전후의 연속 이미지를 저장합니다. 영상은 저장하지 않습니다. 라운드마다20 MiB이하의 diagnostics.zip을 만듭니다. 자동 업로드는 없습니다. 공유 전 이미지를 확인하세요.\n\n이미지는960×540이며 압축은 제어 종료 후 실행합니다. 모드를 끄면 진단 처리를 활성화하지 않습니다.\n\n기본 시작키F8, F9는 항상 정지합니다. 에너지0에서도 플레이할 수 있습니다. 점수는 게임 결과 화면에서 확인하세요.',
+        'packing':'라운드 {index} 진단 준비 중…', 'archive':'Issue 첨부용 ZIP: {path}',
+        'hotkey_error':'{key} 등록 실패. 다른 시작 단축키나 시작 버튼을 사용하세요.',
+        'reason_recording_error':'진단 저장 실패',
+    },
+    'id': {
+        'round_hint':'1–999 ronde; setiap mulai mengatur ulang hitungan.', 'start_shortcut':'Tombol mulai',
+        'diagnostics':'Mode pengembang (catatan + gambar diagnostik)', 'footer':'V27 · 25ms · Input dari gambar layar',
+        'invalid':'Gunakan 1–999 ronde dan tombol yang valid. Pengamatan hanya satu ronde.',
+        'help':'Menyimpan semua keputusan frame, waktu input, gambar asli/garis tali dan rangkaian gambar saat hati berkurang atau ronde berakhir. Tanpa video. Setiap ronde menghasilkan diagnostics.zip maksimal20 MiB. Tidak diunggah otomatis; periksa gambar sebelum berbagi.\n\nGambar960×540 dikompres setelah kontrol berhenti. Mode nonaktif tidak menjalankan diagnostik.\n\nMulai standarF8; F9 selalu berhenti. Energi0 tetap bisa bermain. Lihat skor pada layar hasil game.',
+        'packing':'Menyiapkan diagnostik ronde {index}…', 'archive':'ZIP lampiran Issue: {path}',
+        'hotkey_error':'Tidak dapat mendaftarkan {key}; pilih tombol mulai lain atau gunakan tombol Mulai.',
+        'reason_recording_error':'gagal menyimpan diagnostik',
+    },
+}
+for language, values in V27_TEXT.items():
+    TEXT[language].update(values)
+
+
+
 def text(language, key, **values):
     return TEXT.get(language, TEXT['en']).get(key, TEXT['en'].get(key, key)).format(**values)

@@ -1,3 +1,4 @@
 -r requirements.txt
 pytest>=8
 pyinstaller==6.22.3
+Pillow>=11

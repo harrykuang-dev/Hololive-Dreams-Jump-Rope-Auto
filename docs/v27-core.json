@@ -1,0 +1,43 @@
+{
+  "baseline": "V27",
+  "key_down_ms": 25,
+  "core_sha256": {
+    "baseline_v25.py": "6ca04e95f8dfa044059c4d597f9bc5b9a3f5aaf55ee60b50e455fc41c80aae33",
+    "candidate_tracker.py": "23916fa3f68b5e93479be6c1566306f0894081f688ca536233afad2ca075e788",
+    "candidates.py": "5709914f499134661ce461235b22f14e583d030761f31b3782cb67a1ad70337b",
+    "priority.py": "ce0f02028875acaf743fc2da8c9dc86d603242bcc8e4a4e45e58c2296bcf4e84",
+    "repair_detector.py": "65ee94057ab3d23e1b8a942e55708b62efad38552a111a0d777e16a077f69db4"
+  },
+  "controller_matches_frozen_baseline": true,
+  "capture_and_gameplay_gate_unchanged": true,
+  "rounds": [
+    {
+      "stem": "snap_clock-02",
+      "observations": 4234,
+      "candidate_count": 74,
+      "mismatches": []
+    },
+    {
+      "stem": "snap_clock-04",
+      "observations": 6985,
+      "candidate_count": 125,
+      "mismatches": []
+    },
+    {
+      "stem": "snap_clock-10",
+      "observations": 5721,
+      "candidate_count": 105,
+      "mismatches": []
+    }
+  ],
+  "total_observations": 16940,
+  "core_sha256_format": "original frozen file bytes",
+  "canonical_core_sha256": {
+    "baseline_v25.py": "06eabaf4888c18e557f228058f819268850b27d871011bbe6310d6b475ec8f39",
+    "candidate_tracker.py": "2cfcd88587aa542060b83defd4de9698dffc5215a385336ede4f7174d22880d8",
+    "candidates.py": "5709914f499134661ce461235b22f14e583d030761f31b3782cb67a1ad70337b",
+    "priority.py": "ed9330b9ca7efbb08dcf6791a923de1e3901bc424ce3f58cb71622012d25a391",
+    "repair_detector.py": "65ee94057ab3d23e1b8a942e55708b62efad38552a111a0d777e16a077f69db4"
+  },
+  "canonical_hash_format": "UTF-8 text with CRLF normalized to LF"
+}

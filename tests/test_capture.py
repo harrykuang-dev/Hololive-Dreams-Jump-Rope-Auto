@@ -129,7 +129,7 @@ def test_dxgi_waits_for_fresh_frame_and_releases_once(desktop):
 
 def test_dxgi_timeout_never_returns_cached_frame(desktop):
     camera = fake_dxgi(desktop, iter([None]*10))
-    ticks = iter([0, .05, .10])
+    ticks = iter([0, .25, .50, .50, .50])  # Includes capture-event logging clock reads.
     capture = vision.DxgiCapture(123, camera_factory=lambda **kwargs: camera,
                                  clock=lambda: next(ticks), sleeper=lambda _: None)
     with pytest.raises(RuntimeError, match='舊幀'):

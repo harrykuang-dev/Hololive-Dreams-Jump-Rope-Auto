@@ -7,6 +7,7 @@ import ctypes
 import logging
 import threading
 import time
+import statistics
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -16,9 +17,8 @@ import win32con
 import win32gui
 import win32process
 
-from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen, TemporaryCaptureOverlayError, NoFreshFrameError
-from rope_track import VisualPassDetector
-from round_recording import RoundRecorder
+from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen, TemporaryCaptureOverlayError, NoFreshFrameError, RecoveredFrameGap
+from v27_detector import VisualPassDetector
 
 LOG = logging.getLogger("jump-rope-auto")
 
@@ -41,6 +41,9 @@ class BotConfig:
     auto_start: bool = False
     target_fps: float = 60.0
     capture_backend: str = 'screen'
+    shared_normalization: bool = False
+    diagnostics_enabled: bool = True
+    defer_record_resize: bool = False
 
     def validate(self) -> None:
         if not 0.001 <= self.key_down_time <= 0.05:
@@ -57,6 +60,8 @@ class BotConfig:
             raise ValueError('target_fps must be between 15 and 60')
         if self.capture_backend not in ('screen', 'printwindow', 'dxgi'):
             raise ValueError('capture_backend must be screen, printwindow or dxgi')
+        if not self.diagnostics_enabled and self.record_path is not None:
+            raise ValueError('Diagnostics disabled requires record_path=None')
 
 
 class JumpRopeBot:
@@ -85,7 +90,15 @@ class JumpRopeBot:
         self.input_times: list[float] = []
         self.menu_actions: list[tuple[str, float]] = []
         self.recording_performance = None
+        self.diagnostic_recorder = None
         self._mouse_down = False
+        self.gate_type = RoundGate
+        if self.config.shared_normalization:
+            from shared_gate import SharedRoundGate
+            SharedRoundGate.reset_cache()
+            self.gate_type = SharedRoundGate
+        self.input_pulses = []
+        self.basic_performance = {}
 
     @property
     def running(self) -> bool:
@@ -144,10 +157,10 @@ class JumpRopeBot:
         if self._stopped() or win32gui.GetForegroundWindow() != self._hwnd:
             self.stop()
             return False
-        if not RoundGate.gameplay_visible(frame) or not RoundGate.player_ready(frame):
+        if not self.gate_type.gameplay_visible(frame) or not self.gate_type.player_ready(frame):
             self.stop()
             return False
-        point = RoundGate.jump_position(frame)
+        point = self.gate_type.jump_position(frame)
         if point is None:
             self.stop()
             return False
@@ -164,6 +177,10 @@ class JumpRopeBot:
             self._sleep(self.config.key_down_time)
         finally:
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+            released_at = self._clock()
+            self.input_pulses.append({'down':self.last_tap_at,'up':released_at,
+                'requested_ms':self.config.key_down_time*1000,
+                'actual_ms':(released_at-self.last_tap_at)*1000})
             self._mouse_down = False
         return True
 
@@ -211,19 +228,22 @@ class JumpRopeBot:
         self.last_error = None
         self.stop_reason = "stopped"
         self.last_tap_at = None
+        self.input_pulses = []
         self.round_started_at = None
         self.input_times = []
         self.menu_actions = []
         self.recording_performance = None
         self._mouse_down = False
-        recorder: RoundRecorder | None = None
+        recorder = None
         postroll_done = False
+        sample_times = []
+        numeric = {k:[] for k in ('capture_ms','gate_ms','detector_ms','fresh_capture_ms','input_delay_ms','record_submit_ms','iteration_ms','sleep_requested_ms','sleep_actual_ms')}
         try:
             if self._stopped():
                 return
             self.focus_game()
             detector = VisualPassDetector()
-            gate = RoundGate()
+            gate = self.gate_type()
             startup_screen = StartupScreen() if self.config.auto_start and not self.config.observe_only else None
             navigator = StartupNavigator(startup_screen) if startup_screen is not None else None
             capture = (GameCapture(self._hwnd) if self.config.capture_backend == 'screen'
@@ -248,6 +268,12 @@ class JumpRopeBot:
                     break
                 try:
                     frame = capture.grab()
+                except RecoveredFrameGap:
+                    # No cached pixels or pre-gap candidate can survive recovery.
+                    # Original input cooldown, F9, focus and visibility guards remain.
+                    detector = VisualPassDetector()
+                    LOG.warning('DXGI 短暫空檔已恢復，重建識別狀態；本次不輸入')
+                    continue
                 except TemporaryCaptureOverlayError:
                     # The launch action's banner/cursor can outlive startup.
                     # Before the FIRST pixel capture only, await its removal
@@ -279,19 +305,22 @@ class JumpRopeBot:
                 now = self._clock()
                 timing = {'capture_ms': round((now-loop_started)*1000, 3)}
                 if self.config.record_path is not None and recorder is None:
-                    recorder = RoundRecorder(self.config.record_path, frame, fps=self.config.target_fps)
+                    from diagnostics import RoundDiagnostics as EvidenceRecorder
+                    recorder = EvidenceRecorder(self.config.record_path, frame,
+                        fps=self.config.target_fps, defer_resize=self.config.defer_record_resize)
+                    self.diagnostic_recorder = recorder
                 gate_started = self._clock()
                 allowed = gate.observe(frame)
-                visible = RoundGate.gameplay_visible(frame)
+                visible = self.gate_type.gameplay_visible(frame)
                 if visible and first_hud_at is None:
                     first_hud_at = now
                 gameplay_seen = gameplay_seen or visible
                 # Even one live-HUD frame permanently disables startup clicks.
                 # This covers a very short round that ends before the gate's
                 # three-frame confirmation can latch.
-                if navigator is not None and not navigator.finished and RoundGate.gameplay_visible(frame):
+                if navigator is not None and not navigator.finished and self.gate_type.gameplay_visible(frame):
                     navigator.seal()
-                ready = RoundGate.player_ready(frame) if allowed else False
+                ready = self.gate_type.player_ready(frame) if allowed else False
                 timing['gate_ms'] = round((self._clock()-gate_started)*1000, 3)
                 candidate = False
                 clicked = False
@@ -308,8 +337,13 @@ class JumpRopeBot:
                 def record(observed_frame, at, *, hud, player_ready, event=False,
                            sent=False, input_elapsed=None, menu_action=None,
                            menu_input_elapsed=None):
+                    if phase=='round':
+                        sample_times.append(at-started)
+                        for key in ('capture_ms','gate_ms','detector_ms','fresh_capture_ms','input_delay_ms'):
+                            if key in timing:numeric[key].append(timing[key])
                     if recorder is None:
                         return
+                    record_started=self._clock()
                     p = detector.position if measured else None
                     recorder.add(
                         observed_frame, at-started, hud=hud, ready=player_ready,
@@ -332,6 +366,7 @@ class JumpRopeBot:
                             if menu_input_elapsed is not None else None,
                         },
                     )
+                    if phase=='round':numeric['record_submit_ms'].append((self._clock()-record_started)*1000)
                 if gate.finished:
                     if navigator is not None:
                         navigator.seal()
@@ -376,7 +411,12 @@ class JumpRopeBot:
                     break
                 if not allowed or not ready:
                     record(frame, now, hud=allowed, player_ready=ready)
+                    sleep_started=self._clock()
+                    if phase=='round':numeric['iteration_ms'].append((sleep_started-loop_started)*1000)
                     self._sleep(0.02)
+                    if phase=='round':
+                        numeric['sleep_requested_ms'].append(20.)
+                        numeric['sleep_actual_ms'].append((self._clock()-sleep_started)*1000)
                     continue
                 detector_started = self._clock()
                 candidate = detector.observe(frame, now)
@@ -390,10 +430,17 @@ class JumpRopeBot:
                         if recorder is not None:
                             recorder.check_health()
                         fresh_started = self._clock()
-                        fresh = capture.grab()
+                        try:
+                            fresh = capture.grab()
+                        except RecoveredFrameGap:
+                            record(frame, now, hud=allowed, player_ready=ready,
+                                   event=candidate, sent=False)
+                            detector = VisualPassDetector()
+                            LOG.warning('按鍵前擷取有空檔；取消候選並重建識別狀態')
+                            continue
                         timing['fresh_capture_ms'] = round((self._clock()-fresh_started)*1000, 3)
                         fresh_hud = gate.observe(fresh)
-                        fresh_ready = RoundGate.player_ready(fresh) if fresh_hud else False
+                        fresh_ready = self.gate_type.player_ready(fresh) if fresh_hud else False
                         if not fresh_hud:
                             self.stop_reason = "round_finished"
                             phase = "result"
@@ -414,9 +461,14 @@ class JumpRopeBot:
                     last_report = now
                 # Budget the entire iteration, not an extra sleep after work.
                 # This schedules observations only; it never schedules jumps.
-                remaining = 1/self.config.target_fps-(self._clock()-loop_started)
+                elapsed_iteration=self._clock()-loop_started
+                numeric['iteration_ms'].append(elapsed_iteration*1000)
+                remaining = 1/self.config.target_fps-elapsed_iteration
                 if remaining > 0:
+                    sleep_started=self._clock()
                     self._sleep(remaining)
+                    numeric['sleep_requested_ms'].append(remaining*1000)
+                    numeric['sleep_actual_ms'].append((self._clock()-sleep_started)*1000)
         except Exception as error:
             self.last_error = error
             self.stop_reason = "error"
@@ -470,6 +522,21 @@ class JumpRopeBot:
                 except Exception as error:
                     self.stop_reason = 'capture_close_error'
                     self.last_error = self.last_error or error
+            duration=sample_times[-1]-sample_times[0] if len(sample_times)>1 else 0
+            self.basic_performance={'actual_round_fps':(len(sample_times)-1)/duration if duration else None,
+                'capture_events':[{**event,'time':round(event['time']-started,4)}
+                    for event in getattr(getattr(capture,'impl',None),'capture_events',[])] if 'capture' in locals() else [],
+                'fresh_detection_fps':len(numeric['detector_ms'])/duration if duration else None,
+                'round_frames':len(sample_times),'tap_count':self.tap_count,
+                'diagnostics_enabled':self.config.diagnostics_enabled,
+                'measurements':{k:{'median':statistics.median(values),
+                    'p95':sorted(values)[min(len(values)-1,int(.95*(len(values)-1)))],
+                    'count':len(values)} for k,values in numeric.items() if values},
+                'pulses':{'count':len(self.input_pulses),
+                    'median_ms':statistics.median(p['actual_ms'] for p in self.input_pulses) if self.input_pulses else None,
+                    'minimum_ms':min((p['actual_ms'] for p in self.input_pulses),default=None),
+                    'maximum_ms':max((p['actual_ms'] for p in self.input_pulses),default=None)}}
+            if self.config.shared_normalization:self.gate_type.reset_cache()
             self._running.clear()
 
     def run(self, duration: float | None = None) -> None:

@@ -18,7 +18,9 @@ def verify(executable: Path, root: Path) -> dict:
     modules = archive.open_embedded_archive('PYZ.pyz')
     sources = {}
     for name in ('app_locale', 'app_settings', 'batch_session', 'jump_rope_bot',
-                 'rope_track', 'vision', 'tools.run_round_test', 'main_ui'):
+                 'v27_detector', 'baseline_v25', 'candidate_tracker', 'candidates',
+                 'priority', 'repair_detector', 'shared_gate', 'global_hotkey',
+                 'diagnostics', 'vision', 'session_flow', 'main_ui'):
         path = root / (name.replace('.', '/')+'.py')
         frozen = marshal.loads(archive.extract(name)) if name == 'main_ui' else modules.extract(name)
         expected = compile(path.read_text(encoding='utf-8'), frozen.co_filename, 'exec', dont_inherit=True)
@@ -28,13 +30,18 @@ def verify(executable: Path, root: Path) -> dict:
         # already compared above. Hash that canonical form, not checkout CRLF.
         sources[path.relative_to(root).as_posix()] = hashlib.sha256(
             path.read_text(encoding='utf-8').encode('utf-8')).hexdigest()
-    if any(name == 'experiments' or name.startswith('experiments.') for name in modules.toc):
+    excluded = ('experiments', 'curve_checks', 'experiment_detector', 'variants',
+                'UnityPy', 'hololive_toolkit', 'imageio_ffmpeg')
+    if any(any(name == prefix or name.startswith(prefix+'.') for prefix in excluded) for name in modules.toc):
         raise ValueError('Archived candidate was accidentally bundled')
+    if any(any(token in name.lower() for token in ('gameassembly','unityplayer','resources.assets','globalgamemanagers')) for name in archive.toc):
+        raise ValueError('Game content was accidentally bundled')
     resources = ['LICENSE', 'third_party/fishing-auto-MIT.txt', 'assets/jump-rope.ico']
-    resources.extend(path.relative_to(root).as_posix() for path in sorted((root/'assets/startup').glob('*')) if path.is_file())
     for name in resources:
         if archive.extract(name.replace('/', '\\')) != (root/name).read_bytes():
             raise ValueError(f'Bundled resource differs from source: {name}')
+    if any(name.startswith('media\\') for name in archive.toc):
+        raise ValueError('Unused video encoder was bundled')
     version = win32api.GetFileVersionInfo(str(executable), '\\')
     ms, ls = version['FileVersionMS'], version['FileVersionLS']
     return {'executable': executable.name,
@@ -47,6 +54,7 @@ def verify(executable: Path, root: Path) -> dict:
             'source_hash_format': 'UTF-8 text with CRLF normalized to LF',
             'bundled_resources_match': resources,
             'archived_candidate_bundled': False,
+            'game_content_bundled': False,
             'scope': 'Static archive verification; does not launch or control the game'}
 
 

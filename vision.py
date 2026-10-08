@@ -23,6 +23,10 @@ class NoFreshFrameError(RuntimeError):
     """No new desktop frame; never authorizes reusing captured pixels."""
 
 
+class RecoveredFrameGap(NoFreshFrameError):
+    """Fresh capture resumed after a gap; discard it and reset tracking."""
+
+
 class PrintWindowCapture:
     """Capture a Unity window even when another application covers it."""
 
@@ -164,10 +168,11 @@ class DxgiCapture:
     This backend currently supports a game wholly on the primary monitor.
     """
     def __init__(self, hwnd, *, camera_factory=None, clock=time.perf_counter,
-                 sleeper=time.sleep, fresh_timeout=.1):
+                 sleeper=time.sleep, fresh_timeout=.5):
         self.guard = ScreenCapture(hwnd)
         self.clock, self.sleeper = clock, sleeper
         self.fresh_timeout = fresh_timeout
+        self.capture_events = []
         self.closed = False
         self.camera = None
         ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
@@ -189,7 +194,9 @@ class DxgiCapture:
         x, y, width, height = rect
         if x < 0 or y < 0 or x+width > self.camera.width or y+height > self.camera.height:
             raise RuntimeError('DXGI 遊戲已離開主螢幕；已停止')
-        deadline = self.clock()+self.fresh_timeout
+        wait_started = self.clock()
+        deadline = wait_started+self.fresh_timeout
+        none_count = 0
         while True:
             if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
                 raise RuntimeError('F9 已停止 DXGI 等待；不會繼續輸入')
@@ -202,9 +209,17 @@ class DxgiCapture:
             if frame is not None:
                 if frame.shape != (height, width, 3):
                     raise RuntimeError('DXGI 畫面尺寸不吻合；已停止')
+                waited = self.clock()-wait_started
+                if waited >= .1:
+                    self.capture_events.append({'time':self.clock(), 'wait_ms':round(waited*1000,3),
+                        'none_count':none_count, 'action':'discard_fresh_frame_and_reset_tracker'})
+                    raise RecoveredFrameGap('DXGI 新畫面已恢復；丟棄跨空檔幀並重建識別狀態')
                 return frame
+            none_count += 1
             if self.clock() >= deadline:
-                raise NoFreshFrameError('DXGI 未取得新畫面；安全停止，不使用舊幀')
+                self.capture_events.append({'time':self.clock(), 'wait_ms':round((self.clock()-wait_started)*1000,3),
+                    'none_count':none_count, 'action':'stop_after_bounded_wait'})
+                raise NoFreshFrameError('DXGI 等待500ms仍未取得新畫面；安全停止，不使用舊幀')
             self.sleeper(.001)
 
     def close(self):
@@ -323,60 +338,53 @@ class StartupScreen:
         "play": (.866, .909),
     }
 
-    def __init__(self) -> None:
-        root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-        self.templates = {}
-        for name in ("next", "ok", "play"):
-            path = root / "assets" / "startup" / f"{name}.png"
-            template = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
-            if template is None or template.shape != (40, 135):
-                raise RuntimeError(f"啟動畫面辨識樣板缺失：{path}")
-            ink = template[:, :85]
-            # Unity enlarges the hovered button. Match both resting and
-            # hover sizes; the page-context check remains mandatory.
-            self.templates[name] = [cv2.resize(
-                ink, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
-                for scale in (.80, .85, .90, 1.0, 1.05)]
-
     @staticmethod
     def _count(hsv: np.ndarray, roi, lower, upper) -> int:
         x0, y0, x1, y1 = roi
         return int(np.count_nonzero(cv2.inRange(hsv[y0:y1, x0:x1], lower, upper)))
 
+    @classmethod
+    def _button_visible(cls, hsv, name):
+        # RETR_EXTERNAL follows the pill's silhouette. Interior text holes do
+        # not enter any score, template or count used to recognize this button.
+        roi = hsv[455:525, 700:950]
+        cyan = cv2.inRange(roi, (80, 95, 100), (115, 255, 255))
+        white = cv2.inRange(roi, (0, 0, 185), (179, 85, 255))
+        contours, _ = cv2.findContours(cyan, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        expected_x, expected_y = cls.BUTTONS[name]
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            if not (140 <= w <= 220 and 32 <= h <= 58 and 3 <= w/h <= 5.5
+                    and abs(700+x+w/2-960*expected_x) <= 14
+                    and abs(455+y+h/2-540*expected_y) <= 8
+                    and cv2.contourArea(contour)/(w*h) >= .72):
+                continue
+            fill = np.zeros(cyan.shape, np.uint8)
+            cv2.drawContours(fill, [contour], -1, 255, cv2.FILLED)
+            rim = cv2.subtract(cv2.dilate(fill, np.ones((7, 7), np.uint8)), fill)
+            if np.count_nonzero(cv2.bitwise_and(white, rim)) >= 80:
+                return True
+        return False
+
     def identify(self, frame: np.ndarray) -> str | None:
         if frame.size == 0 or RoundGate.gameplay_visible(frame):
             return None
         hsv = cv2.cvtColor(cv2.resize(frame, (960, 540)), cv2.COLOR_BGR2HSV)
-        ink = cv2.inRange(hsv[455:525, 745:915], (0, 0, 185), (179, 85, 255))
-        scores = {}
-        for name, variants in self.templates.items():
-            scores[name] = max(float(cv2.matchTemplate(
-                ink, variant, cv2.TM_CCOEFF_NORMED).max()) for variant in variants)
-        name = max(scores, key=scores.get)
-        if scores[name] < .68 or scores[name] - max(
-                value for key, value in scores.items() if key != name) < .20:
-            return None
-        if name == "next":
-            old_result = self._count(hsv, (570, 145, 765, 185),
-                                     (155, 50, 100), (179, 255, 255)) > 2000
-            event_result = (
-                self._count(hsv, (490, 150, 900, 410),
-                            (0, 0, 170), (179, 65, 255)) > 80000
-                and self._count(hsv, (0, 0, 500, 120),
-                                (85, 60, 100), (115, 255, 255)) > 30000
-            )
-            if old_result:
-                return "next"
-            if event_result:
-                return "event_next"
-            return None
-        elif name == "ok":
-            context = self._count(hsv, (490, 150, 900, 410),
-                                  (0, 0, 170), (179, 65, 255)) > 60000
+        # Page artwork determines the action; no button lettering is read.
+        pink = ((155, 50, 100), (179, 255, 255))
+        card = self._count(hsv, (490, 150, 900, 410), (0, 0, 170), (179, 65, 255))
+        if self._count(hsv, (570, 145, 765, 185), *pink) > 2000:
+            name = 'next'
+        elif card > 60000 and self._count(hsv, (550, 75, 820, 140), *pink) > 800:
+            name = 'ok'
+        elif (card > 80000 and self._count(hsv, (0, 0, 500, 120),
+                                           (85, 60, 100), (115, 255, 255)) > 30000):
+            name = 'event_next'
+        elif self._count(hsv, (20, 20, 280, 150), (15, 90, 120), (45, 255, 255)) > 5000:
+            name = 'play'
         else:
-            context = self._count(hsv, (20, 20, 280, 150),
-                                  (15, 90, 120), (45, 255, 255)) > 5000
-        return name if context else None
+            return None
+        return name if self._button_visible(hsv, name) else None
 
 
 class StartupNavigator:

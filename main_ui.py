@@ -11,7 +11,8 @@ import tkinter as tk
 from tkinter import font, messagebox, ttk
 import win32api
 from app_locale import LANGUAGES, text
-from app_settings import captured_hotkey
+from app_settings import captured_hotkey, parse_stop_hotkey
+from global_hotkey import GlobalHotkey
 from batch_session import APP_VERSION, BatchSession, SessionConfig, diagnostic_base
 
 PROJECT_URL = 'https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto'
@@ -50,6 +51,8 @@ class JumpRopeApp:
         self.session = self.worker = None
         self.messages = queue.Queue()
         self._closing = self._capturing = self.has_error = False
+        self._capture_target = 'stop'
+        self._hotkey_generation = 0
         self.dpi = window_dpi(root)
         self.scale = self.dpi/96
         root.tk.call('tk', 'scaling', self.dpi/72)
@@ -58,7 +61,7 @@ class JumpRopeApp:
         font.nametofont('TkFixedFont').configure(family='Consolas', size=10)
         root.configure(bg=self.BG)
         width, height = window_work_area(root)
-        root.geometry(f'{min(self.px(640),width-self.px(40))}x{min(self.px(740),height-self.px(40))}')
+        root.geometry(f'{min(self.px(640),width-self.px(40))}x{min(self.px(790),height-self.px(40))}')
         root.minsize(min(self.px(570),width-self.px(40)), min(self.px(620),height-self.px(40)))
         root.protocol('WM_DELETE_WINDOW', self.close)
         try:
@@ -69,10 +72,15 @@ class JumpRopeApp:
         self.target = tk.StringVar(root, value='1')
         self.stop_key = tk.StringVar(root, value='F9')
         self.shortcut_display = tk.StringVar(root, value='F9')
+        self.start_key = tk.StringVar(root, value='F8')
+        self.start_shortcut_display = tk.StringVar(root, value='F8')
         self.diagnostics = tk.BooleanVar(root, value=False)
         self.observe_only = tk.BooleanVar(root, value=False)
         self._build()
         self.apply_language()
+        self.hotkey = GlobalHotkey(lambda:self.messages.put(('start_hotkey', self._hotkey_generation)),
+                                   lambda value,ok,error:self.messages.put(('hotkey_status', (value,ok,error))))
+        self.hotkey.start()
         self.log_handler = QueueLog(self.messages)
         self.log_handler.setFormatter(logging.Formatter('%(asctime)s  %(message)s', datefmt='%H:%M:%S'))
         self.logger = logging.getLogger('jump-rope-auto')
@@ -118,7 +126,7 @@ class JumpRopeApp:
         form = ttk.Frame(main)
         form.grid(row=5,column=0,sticky='ew')
         form.columnconfigure(1,weight=1)
-        for row,name in ((0,'language_label'),(1,'rounds_label'),(3,'shortcut_label')):
+        for row,name in ((0,'language_label'),(1,'rounds_label'),(3,'start_shortcut_label'),(4,'shortcut_label')):
             widget = ttk.Label(form)
             widget.grid(row=row,column=0,sticky='w',padx=(0,self.px(18)),pady=self.px(5))
             setattr(self,name,widget)
@@ -129,13 +137,18 @@ class JumpRopeApp:
         self.target_entry.grid(row=1,column=1,sticky='ew',pady=self.px(5))
         self.round_hint = ttk.Label(form,style='Muted.TLabel',wraplength=self.px(380))
         self.round_hint.grid(row=2,column=1,sticky='w')
+        self.start_shortcut_entry = ttk.Entry(form,textvariable=self.start_shortcut_display,state='readonly')
+        self.start_shortcut_entry.grid(row=3,column=1,sticky='ew',pady=self.px(5))
+        self.start_shortcut_entry.bind('<Button-1>',self.begin_start_capture)
+        self.start_shortcut_entry.bind('<FocusOut>',self.end_capture)
+        self.start_shortcut_entry.bind('<KeyPress>',self.capture_key)
         self.shortcut_entry = ttk.Entry(form,textvariable=self.shortcut_display,state='readonly')
-        self.shortcut_entry.grid(row=3,column=1,sticky='ew',pady=self.px(5))
+        self.shortcut_entry.grid(row=4,column=1,sticky='ew',pady=self.px(5))
         self.shortcut_entry.bind('<Button-1>',self.begin_capture)
         self.shortcut_entry.bind('<FocusOut>',self.end_capture)
         self.shortcut_entry.bind('<KeyPress>',self.capture_key)
         self.key_hint = ttk.Label(form,style='Muted.TLabel')
-        self.key_hint.grid(row=4,column=1,sticky='w')
+        self.key_hint.grid(row=5,column=1,sticky='w')
         controls = ttk.Frame(main)
         controls.grid(row=6,column=0,sticky='ew',pady=(self.px(14),self.px(12)))
         controls.columnconfigure((0,1),weight=1,uniform='actions')
@@ -166,7 +179,7 @@ class JumpRopeApp:
         self.root.title(f'Hololive Dreams — {self.tr("title")} v{APP_VERSION}')
         for widget,key in ((self.title_label,'title'),(self.instructions,'instructions'),
                 (self.language_label,'language'),(self.rounds_label,'rounds'),(self.round_hint,'round_hint'),
-                (self.shortcut_label,'shortcut'),(self.key_hint,'key_hint'),(self.start_button,'start'),
+                (self.shortcut_label,'shortcut'),(self.start_shortcut_label,'start_shortcut'),(self.key_hint,'key_hint'),(self.start_button,'start'),
                 (self.stop_button,'stop'),(self.diagnostics_check,'diagnostics'),(self.observe_check,'observe'),
                 (self.log_title,'log'),(self.footer,'footer')):
             widget.configure(text=self.tr(key))
@@ -183,17 +196,33 @@ class JumpRopeApp:
 
     def begin_capture(self,_event=None):
         if not self.shortcut_entry.instate(['disabled']):
+            self._capture_target = 'stop'
             self._capturing = True
+            self._hotkey_generation += 1
+            self.hotkey.configure(enabled=False)
             self.shortcut_entry.focus_set()
             self.shortcut_display.set(self.tr('capture_key'))
+        return 'break'
+
+    def begin_start_capture(self,_event=None):
+        if not self.start_shortcut_entry.instate(['disabled']):
+            self._capture_target = 'start'
+            self._capturing = True
+            self._hotkey_generation += 1
+            self.hotkey.configure(enabled=False)
+            self.start_shortcut_entry.focus_set()
+            self.start_shortcut_display.set(self.tr('capture_key'))
         return 'break'
 
     def end_capture(self,_event=None):
         self._capturing = False
         self.shortcut_display.set(self.stop_key.get())
+        self.start_shortcut_display.set(self.start_key.get())
+        if hasattr(self,'hotkey'):
+            self.hotkey.configure(value=self.start_key.get(),enabled=not self._closing and not (self.worker and self.worker.is_alive()))
 
     def _cancel_capture(self,event):
-        if event.widget is not self.shortcut_entry:
+        if event.widget not in (self.shortcut_entry,self.start_shortcut_entry):
             self.end_capture()
 
     def capture_key(self,event):
@@ -201,16 +230,25 @@ class JumpRopeApp:
             return
         value = captured_hotkey(event.keysym,event.state,event.keycode)
         if value:
-            self.stop_key.set(value)
+            start = value if self._capture_target == 'start' else self.start_key.get()
+            stop = value if self._capture_target == 'stop' else self.stop_key.get()
+            sm,sk = parse_stop_hotkey(start)
+            tm,tk = parse_stop_hotkey(stop)
+            if (sk == tk and set(sm) == set(tm)) or sk == 0x78:
+                return 'break'
+            (self.start_key if self._capture_target == 'start' else self.stop_key).set(value)
             self.end_capture()
         return 'break'
 
     def set_controls(self,running):
+        self._hotkey_generation += 1
         self.end_capture()
         self.start_button.configure(state='disabled' if running else 'normal')
         self.stop_button.configure(state='normal' if running else 'disabled')
         self.language_choice.configure(state='disabled' if running else 'readonly')
         self.shortcut_entry.configure(state='disabled' if running else 'readonly')
+        self.start_shortcut_entry.configure(state='disabled' if running else 'readonly')
+        self.hotkey.configure(value=self.start_key.get(),enabled=not running and not self._closing)
         for widget in (self.target_entry,self.diagnostics_check,self.observe_check,self.help_button):
             widget.configure(state='disabled' if running else 'normal')
 
@@ -223,6 +261,8 @@ class JumpRopeApp:
         self.log.configure(state='disabled')
 
     def start(self):
+        if self._closing or self._capturing:
+            return
         if self.worker and self.worker.is_alive():
             return
         try:
@@ -263,6 +303,16 @@ class JumpRopeApp:
                     self.append_log(value)
                 elif kind == 'diagnostics':
                     self.append_log(self.tr('saved',path=value))
+                elif kind == 'packing':
+                    self.status.configure(text=self.tr('packing',index=value),foreground=self.BLUE)
+                elif kind == 'archive':
+                    self.append_log(self.tr('archive',path=value))
+                elif kind == 'start_hotkey':
+                    if value == self._hotkey_generation:
+                        self.start()
+                elif kind == 'hotkey_status':
+                    if not value[1]:
+                        self.append_log(self.tr('hotkey_error',key=value[0]))
                 elif kind == 'round':
                     self.status.configure(text=self.tr('running',index=value[0],target=value[1]),foreground=self.GREEN)
                 elif kind == 'round_done':
@@ -302,6 +352,7 @@ class JumpRopeApp:
 
     def close(self):
         self._closing = True
+        self.hotkey.close()
         self.stop()
         self.root.after(100,self.finish_close)
 

@@ -17,7 +17,7 @@ def mutex(monkeypatch):
     return closed
 
 
-@pytest.mark.parametrize('rounds', [0, 8, -1, 1.5, True])
+@pytest.mark.parametrize('rounds', [0, 1000, -1, 1.5, True])
 def test_invalid_round_limit(rounds):
     with pytest.raises(ValueError):
         SessionConfig(rounds=rounds).validate()

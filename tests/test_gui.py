@@ -9,6 +9,13 @@ from app_locale import LANGUAGES
 pytestmark = pytest.mark.gui
 
 
+@pytest.fixture(autouse=True)
+def fake_global_listener(monkeypatch):
+    # GUI tests must not register real desktop shortcuts or start a controller.
+    monkeypatch.setattr(main_ui,'GlobalHotkey',lambda *_:SimpleNamespace(
+        start=Mock(), configure=Mock(), close=Mock()))
+
+
 @pytest.fixture(scope='module')
 def tk_runtime():
     # Repeated Tk() interpreters in one process intermittently lose Tcl's
@@ -26,6 +33,7 @@ def root(tk_runtime):
 
 
 def dispose(root, app):
+    app.hotkey.close()
     app.logger.removeHandler(app.log_handler)
     for callback in root.tk.splitlist(root.tk.call('after','info')):
         root.after_cancel(callback)
@@ -106,3 +114,36 @@ def test_shortcut_capture_requires_click_and_locks_while_running(root):
         assert app.stop_key.get() == 'Ctrl+Alt+Q'
     finally:
         dispose(root, app)
+
+
+def test_start_shortcut_cannot_conflict_with_stop_and_never_runs_during_capture(root):
+    root.withdraw()
+    factory = Mock()
+    app = main_ui.JumpRopeApp(root,session_factory=factory)
+    try:
+        app.begin_start_capture()
+        app.start()
+        factory.assert_not_called()
+        app.capture_key(SimpleNamespace(keysym='F9',state=0,keycode=0x78))
+        assert app.start_key.get() == 'F8'
+        app.capture_key(SimpleNamespace(keysym='F7',state=0,keycode=0x76))
+        assert app.start_key.get() == 'F7'
+        assert not app._capturing
+        app.set_controls(True)
+        app.hotkey.configure.assert_called_with(value='F7',enabled=False)
+    finally:
+        dispose(root,app)
+
+
+def test_queued_shortcut_from_before_settings_capture_is_discarded(root):
+    root.withdraw()
+    factory = Mock()
+    app = main_ui.JumpRopeApp(root,session_factory=factory)
+    try:
+        app.messages.put(('start_hotkey',app._hotkey_generation))
+        app.begin_start_capture()
+        app.end_capture()
+        app.poll()
+        factory.assert_not_called()
+    finally:
+        dispose(root,app)

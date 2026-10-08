@@ -559,13 +559,17 @@ def test_prearmed_round_waits_for_play_and_never_restarts(monkeypatch, tmp_path)
     bot.run()
 
     import json
-    evidence = json.loads(path.with_suffix('.events.json').read_text(encoding='utf-8'))
+    import gzip
+    directory = path.with_suffix('')
+    evidence = json.loads((directory/'manifest.json').read_text(encoding='utf-8'))['result']
+    with gzip.open(directory/'frames.jsonl.gz', 'rt', encoding='utf-8') as stream:
+        evidence['frames'] = [json.loads(line) for line in stream]
     assert bot.stop_reason == 'round_finished'
     assert len(taps) == 1
     assert evidence['round_started_t'] is not None
     assert all(not entry['clicked'] for entry in evidence['frames'] if entry['phase'] == 'waiting')
     assert all(not entry['clicked'] for entry in evidence['frames'] if entry['phase'] == 'result')
-    assert sum(entry['input_t'] is not None for entry in evidence['frames']) == 1
+    assert sum(entry['input_elapsed'] is not None for entry in evidence['frames']) == 1
     result_t = min(entry['t'] for entry in evidence['frames'] if entry['phase'] == 'result')
     assert max(evidence['input_times']) < result_t
 
