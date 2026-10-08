@@ -5,7 +5,7 @@ import pytest
 from jump_rope_bot import BotConfig, JumpRopeBot
 import jump_rope_bot as controller
 from vision import RoundGate
-from rope_track import VisualPassDetector, RopePosition
+from rope_geometry import VisualPassDetector, RopePosition
 
 
 def live_frame():

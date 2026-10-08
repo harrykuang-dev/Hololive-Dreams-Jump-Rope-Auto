@@ -246,7 +246,7 @@ class RoundDiagnostics:
         self._write_manifest()
 
     def _write_manifest(self):
-        manifest = {'format_version': 2, 'baseline': 'V27', 'key_down_ms': 25,
+        manifest = {'format_version': 2, 'app_version': '1.0', 'key_down_ms': 25,
                     'video': None, 'result': self.result, 'recording': self.performance,
                     'screenshots':self.saved_shots,'failure_window':self.saved_context,
                     'failure_events':self.context_events,

@@ -18,7 +18,7 @@ def verify(executable: Path, root: Path) -> dict:
     modules = archive.open_embedded_archive('PYZ.pyz')
     sources = {}
     for name in ('app_locale', 'app_settings', 'batch_session', 'jump_rope_bot',
-                 'v27_detector', 'baseline_v25', 'candidate_tracker', 'candidates',
+                 'jump_detector', 'rope_geometry', 'candidate_tracker', 'candidates',
                  'priority', 'repair_detector', 'shared_gate', 'global_hotkey',
                  'diagnostics', 'vision', 'session_flow', 'main_ui'):
         path = root / (name.replace('.', '/')+'.py')
@@ -36,7 +36,7 @@ def verify(executable: Path, root: Path) -> dict:
         raise ValueError('Archived candidate was accidentally bundled')
     if any(any(token in name.lower() for token in ('gameassembly','unityplayer','resources.assets','globalgamemanagers')) for name in archive.toc):
         raise ValueError('Game content was accidentally bundled')
-    resources = ['LICENSE', 'third_party/fishing-auto-MIT.txt', 'assets/jump-rope.ico',
+    resources = ['LICENSE', 'assets/jump-rope.ico',
                  'assets/hopping-rope-logo.png']
     for name in resources:
         if archive.extract(name.replace('/', '\\')) != (root/name).read_bytes():

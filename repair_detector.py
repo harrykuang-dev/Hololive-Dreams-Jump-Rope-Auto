@@ -1,4 +1,4 @@
-"""Two independently switchable repairs around frozen V26; visual input only."""
+"""Visual geometry guards for the jump-rope detector."""
 from priority import PriorityDetector
 
 CONFIGS={

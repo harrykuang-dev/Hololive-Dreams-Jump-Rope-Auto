@@ -14,7 +14,6 @@ def main():
         '--add-data','assets/jump-rope.ico;assets',
         '--add-data','assets/hopping-rope-logo.png;assets',
         '--add-data','LICENSE;.',
-        '--add-data','third_party/fishing-auto-MIT.txt;third_party',
         'main_ui.py'],cwd=root,check=True)
 
 

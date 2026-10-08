@@ -42,7 +42,7 @@ def test_issue_zip_has_screenshots_and_all_observations_without_video(tmp_path):
         assert sum(f['clicked'] for f in frames) == 1
         assert frames[-1]['phase'] == 'result'
         manifest = json.loads(z.read('manifest.json'))
-        assert manifest['baseline'] == 'V27' and manifest['key_down_ms'] == 25
+        assert manifest['app_version'] == '1.0' and manifest['key_down_ms'] == 25
         assert manifest['video'] is None and manifest['failure_window']
         for row in manifest['failure_window']:
             assert row['path'] in names

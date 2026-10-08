@@ -1,7 +1,7 @@
 from collections import deque
 import cv2
 import numpy as np
-from baseline_v25 import RopePosition, VisualPassDetector as BaselineDetector
+from rope_geometry import RopePosition, VisualPassDetector as BaselineDetector
 
 class CandidateTracker:
     """Fit thin rope evidence in five image bands with moving rope endpoints.

@@ -1,4 +1,4 @@
-"""Final V27 detector: frozen speed2 + snap_clock, without trial modules."""
+"""Visual detector selected for release 1.0."""
 from repair_detector import factory
 
 VisualPassDetector = factory('snap_clock')

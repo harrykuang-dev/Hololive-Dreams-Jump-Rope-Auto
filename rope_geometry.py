@@ -1,7 +1,7 @@
-"""Experimental geometric rope tracker. No timer or input injection.
+"""Geometric rope tracking without timers or input injection.
 
 Fits the visible rope between its two holders, then measures its motion.
-Outputs are unverified candidate events; the controller independently gates
+Outputs are candidate events; the controller independently gates
 input to a confirmed live round.
 """
 from dataclasses import dataclass
@@ -299,7 +299,6 @@ class VisualPassDetector:
         self.missing_count = 0
         self.previous_height = None
         self.last_confident_height = None
-        self.last_confident_time = None
         self.partial_height = None
         self.last_time = None
         self.partial_time = None
@@ -320,6 +319,9 @@ class VisualPassDetector:
         self.shallow_observations = deque(maxlen=8)
         self.floor_dip_height = None
         self.floor_rebounded = False
+        self.floor_return_steps = 0
+        self.floor_dip_coverage = 0.
+        self.floor_return_pending = False
         self.far_observations = deque(maxlen=5)
         self.far_pixels = deque(maxlen=5)
         self.floor_peak_observations = deque(maxlen=5)
@@ -376,6 +378,9 @@ class VisualPassDetector:
         self.gold_last_height = None
         self.floor_dip_height = None
         self.floor_rebounded = False
+        self.floor_return_steps = 0
+        self.floor_dip_coverage = 0.
+        self.floor_return_pending = False
 
     def _update_gold_mode(self, p, height):
         # Night-stage floor rope is blue, not gold. A sustained shallow
@@ -488,10 +493,9 @@ class VisualPassDetector:
             # its real return toward the player. Distinguish the two using
             # observed direction changes, never elapsed time.
             if self.gold_peak_height-height >= .015:
-                if self.floor_dip_height is None:
+                if self.floor_dip_height is None or height < self.floor_dip_height:
                     self.floor_dip_height = height
-                else:
-                    self.floor_dip_height = min(self.floor_dip_height, height)
+                    self.floor_dip_coverage = p.coverage
             # A rebound often returns within .015 of the first peak. Do not
             # require it to remain in the dip zone: that discarded the very
             # rise we needed, delaying the second descent until height .095.
@@ -502,8 +506,24 @@ class VisualPassDetector:
             if (self.floor_dip_height is not None
                     and height-self.floor_dip_height >= rebound_rise):
                 self.floor_rebounded = True
-            return_descent = (self.floor_rebounded and
-                              self.gold_last_height-height >= .004 and height <= .125)
+            drop = self.gold_last_height-height
+            if self.floor_rebounded and drop >= .004:
+                self.floor_return_steps += 1
+            elif drop < -.002:
+                self.floor_return_steps = 0
+                self.floor_return_pending = False
+            if (self.floor_rebounded and self.floor_dip_coverage < .45
+                    and sample_interval < .04 and drop >= .012):
+                self.floor_return_pending = True
+            # A dense single-frame plateau snap can look like the return.
+            # Confirm a return inferred from a PARTIAL trough using two
+            # downward steps at dense capture rates. Strong measured troughs
+            # retain the original decision, avoiding a universal late jump.
+            # A neutral frame adds no evidence; a rise discards it.
+            return_descent = (self.floor_rebounded and drop >= .004
+                              and height <= .125
+                              and (not self.floor_return_pending
+                                   or self.floor_return_steps >= 2))
             if height < self.gold_last_height - .005:
                 self.gold_descent += 1
             if (height <= .08 and (self.gold_descent >= 2 or
@@ -557,16 +577,7 @@ class VisualPassDetector:
             self.last_context_time = None
             self.last_reason = 'scene_cut_reacquire'
             return False
-        # A rejected near-foot prop can persist across two dense captures.
-        # Keep rejecting that same large far-to-near snap for 80ms instead
-        # of accepting it just because the first rejection aged past 40ms.
-        # Ordinary fast approaches and low-coverage occlusion still retain
-        # their existing rules; a strong current rope remains acceptable.
-        snap_window = (.08 if self.last_reason == 'partial_geometry_snap'
-                       and p.coverage >= .35
-                       and previous_position.sag+previous_position.offset <= -.35
-                       and p.sag+p.offset >= -.28 else .04)
-        if (self.last_time is not None and 0 < now-self.last_time < snap_window
+        if (self.last_time is not None and 0 < now-self.last_time < .04
                 and previous_position.coverage >= .35 and p.coverage < .55
                 and abs(p.sag+p.offset-previous_position.sag-previous_position.offset) > .12):
             # A partial prop fit can teleport across the trigger line in one
@@ -680,7 +691,6 @@ class VisualPassDetector:
                 self.armed = True
                 self.below_count = 2
                 self.last_confident_height = height
-                self.last_confident_time = now
                 self.previous_height = height
             self.blue_rearm_needed = False
             self.far_observations.clear()
@@ -690,12 +700,6 @@ class VisualPassDetector:
             self.blue_retreat_steps = 0
             self.blue_retreat_height = None
         floor_rebound = self._gold_floor_rebound(p, height, sample_interval) if self.gold_mode else False
-        # A deeply observed overhead arc can remain hidden behind several
-        # bowls for ~0.33s at high FPS. Preserve its arming evidence briefly
-        # for a CURRENT strong reappearance, never for a blind timed jump.
-        extended_blue_occlusion = (not self.gold_mode and
-            self.last_confident_time is not None and
-            0 < now-self.last_confident_time <= .36)
         if p.coverage < .35:
             self.last_reason = 'weak_rope_evidence'
             if self.context_tick or self.missing_count == 0:
@@ -726,7 +730,7 @@ class VisualPassDetector:
             self.partial_height = (height if p.coverage >= .25
                                    and p.contrast >= .14 else None)
             self.partial_time = now if self.partial_height is not None else None
-            if self.missing_count > 5 and not extended_blue_occlusion:
+            if self.missing_count > 5:
                 self.armed = False
                 self.below_count = 0
                 self.last_confident_height = None
@@ -736,8 +740,7 @@ class VisualPassDetector:
             return False
         recovered_blue_pass = (
             not self.gold_mode and self.armed
-            and (1 <= self.missing_count <= 5 or
-                 (5 < self.missing_count <= 7 and extended_blue_occlusion))
+            and 1 <= self.missing_count <= 5
             and self.last_confident_height is not None
             and self.last_confident_height <= -.28
             and height > self.last_confident_height
@@ -749,12 +752,7 @@ class VisualPassDetector:
         )
         recovered_gold_pass = (
             self.gold_mode and self.armed
-            # A third spaced missing observation can hide ~145ms of the
-            # shallow approach. Still require current visible rope and cap
-            # the retained evidence at 200ms; never jump while occluded.
-            and (1 <= self.missing_count <= 2 or
-                 (self.missing_count == 3 and self.last_confident_time is not None
-                  and 0 < now-self.last_confident_time <= .20))
+            and 1 <= self.missing_count <= 2
             and self.last_confident_height is not None
             and self.last_confident_height <= -.04
             and -.03 <= height <= .08
@@ -763,7 +761,6 @@ class VisualPassDetector:
         self.missing_count = 0
         self.partial_height = None
         self.last_confident_height = height
-        self.last_confident_time = now
         # Both observed misses were late at the foot zone. A shallow gold
         # ground pass crosses earlier than the blue arc. No timed fallback.
         # In the 29-point run a fast blue arc crossed the old zero threshold

@@ -1,4 +1,4 @@
-"""Native UI inspired by Fishing Auto; MIT attribution in third_party/."""
+"""Native desktop interface for the jump-rope assistant."""
 from __future__ import annotations
 import ctypes
 import logging

@@ -1,7 +1,4 @@
-"""Global stop shortcuts, adapted from Hololive Dreams Fishing Auto (MIT).
-
-Copyright (c) 2026 harrykuang-dev. See third_party/fishing-auto-MIT.txt.
-"""
+"""Global stop shortcut settings for the jump-rope assistant."""
 import re
 
 NAMED_KEYS = {'ESC':0x1B,'ESCAPE':0x1B,'PAUSE':0x13,'SPACE':0x20,'TAB':0x09,

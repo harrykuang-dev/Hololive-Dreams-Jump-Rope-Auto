@@ -18,7 +18,7 @@ import win32gui
 import win32process
 
 from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen, TemporaryCaptureOverlayError, NoFreshFrameError, RecoveredFrameGap
-from v27_detector import VisualPassDetector
+from jump_detector import VisualPassDetector
 
 LOG = logging.getLogger("jump-rope-auto")
 

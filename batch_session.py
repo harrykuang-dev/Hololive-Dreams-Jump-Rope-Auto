@@ -89,7 +89,7 @@ class BatchSession:
                 self.directory.mkdir(parents=True, exist_ok=False)
                 executable = Path(sys.executable) if getattr(sys, 'frozen', False) else None
                 manifest = {'app_version': APP_VERSION, 'round_limit': self.config.rounds,
-                            'baseline': 'V27', 'key_down_ms': 25,
+                            'key_down_ms': 25,
                             'startup_recognizer': 'pill_geometry_v1',
                             'capture_backend': 'dxgi', 'target_fps': 60,
                             'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest() if executable else None}
@@ -137,7 +137,7 @@ class BatchSession:
                         archive = recorder.package({
                             'performance': getattr(bot, 'basic_performance', {}),
                             'input_pulses': getattr(bot, 'input_pulses', []),
-                            'app_version': APP_VERSION, 'baseline': 'V27'})
+                            'app_version': APP_VERSION})
                         self.notify('archive', str(archive))
                 if not finished or index == self.config.rounds or self._stopped():
                     if self._stopped():
@@ -155,7 +155,7 @@ class BatchSession:
             try:
                 if self.directory:
                     (self.directory / 'summary.json').write_text(json.dumps({
-                        'app_version': APP_VERSION, 'baseline': 'V27',
+                        'app_version': APP_VERSION,
                         'completed_rounds': self.completed_rounds,
                         'round_limit': self.config.rounds, 'inputs': self.inputs,
                         'stop_reason': self.stop_reason,
