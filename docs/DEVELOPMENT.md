@@ -2,6 +2,8 @@
 
 一般使用方式見 [README](../README.md)。
 
+歷史版本變化見 [版本迭代記錄](VERSION_HISTORY.md)。該文件只記錄歷史，不作為執行入口。
+
 ## 原始碼啟動與建置
 
 需要 Windows x64 和 Python；目前建置環境使用 Python 3.13。
