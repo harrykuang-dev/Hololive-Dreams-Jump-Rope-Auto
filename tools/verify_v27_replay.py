@@ -22,7 +22,7 @@ def verify_promotion():
         actual = hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
         assert actual == manifest['source_sha256'][name], name
         sources[name] = actual
-    # Exact adaptations: recording/import wiring and removal of the fixed F9 stop.
+    # Exact adaptations: recording/import wiring, fixed F9 removal and log wording.
     controller = (ROOT/'jump_rope_bot.py').read_text(encoding='utf-8')
     controller = controller.replace('from v27_detector import VisualPassDetector','from rope_track import VisualPassDetector')
     controller = controller.replace('from diagnostics import RoundDiagnostics as EvidenceRecorder','from evidence import EvidenceRecorder')
@@ -33,6 +33,8 @@ def verify_promotion():
     original = original.replace('Original input cooldown, F9, focus and visibility guards remain.',
                                 'Original input cooldown, configured stop, focus and visibility guards remain.')
     original = original.replace('按 F9 或 Ctrl+C 停止。','按 Ctrl+C 停止。')
+    original = original.replace('啟動前已辨識並點擊 %s；本局結束後不會再操作選單',
+                                '啟動前已辨識並點擊 %s')
     assert controller == original
     # Only the menu recognizer changed in vision; capture, RoundGate and navigator are identical.
     def without_startup(s):

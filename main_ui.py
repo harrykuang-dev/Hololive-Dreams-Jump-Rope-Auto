@@ -177,7 +177,6 @@ class JumpRopeApp:
         self.log.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y')
         self.log.pack(fill='both',expand=True)
-        label('footer',10,'Muted.TLabel',(self.px(10),0))
 
     def apply_language(self,_event=None):
         self.root.title(f'Hololive Dreams — {self.tr("title")} v{APP_VERSION}')
@@ -185,7 +184,7 @@ class JumpRopeApp:
                 (self.language_label,'language'),(self.rounds_label,'rounds'),(self.round_hint,'round_hint'),
                 (self.shortcut_label,'shortcut'),(self.start_shortcut_label,'start_shortcut'),(self.start_button,'start'),
                 (self.stop_button,'stop'),(self.diagnostics_check,'diagnostics'),
-                (self.log_title,'log'),(self.footer,'footer')):
+                (self.log_title,'log')):
             widget.configure(text=self.tr(key))
         if not self.worker or not self.worker.is_alive():
             self.status.configure(text=self.tr('ready'),foreground=self.MUTED)

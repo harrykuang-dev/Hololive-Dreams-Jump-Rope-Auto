@@ -392,7 +392,7 @@ class JumpRopeBot:
                         if startup_screen.identify(fresh) == action and self.tap_startup(
                                 action, fresh, startup_screen):
                             navigator.mark_clicked(action)
-                            LOG.info("啟動前已辨識並點擊 %s；本局結束後不會再操作選單", action)
+                            LOG.info("啟動前已辨識並點擊 %s", action)
                             record(frame, now, hud=False, player_ready=False,
                                    menu_action=action,
                                    menu_input_elapsed=self.menu_actions[-1][1]-started)

@@ -41,7 +41,7 @@ def dispose(root, app):
 
 
 @pytest.mark.parametrize('dpi', [96,120,144,192])
-def test_translated_controls_and_footer_fit_at_supported_dpis(dpi, root):
+def test_translated_controls_fit_at_supported_dpis(dpi, root):
     root.withdraw()
     root.maxsize(3840,2160)
     with patch('main_ui.window_dpi',return_value=dpi), patch('main_ui.window_work_area',return_value=(3840,2160)):
@@ -56,7 +56,7 @@ def test_translated_controls_and_footer_fit_at_supported_dpis(dpi, root):
             assert app.start_button.winfo_height() == app.stop_button.winfo_height()
             assert app.start_button.winfo_width() == app.stop_button.winfo_width()
             assert app.log.winfo_height() >= 40
-            assert app.footer.winfo_rooty()+app.footer.winfo_height() <= root.winfo_rooty()+root.winfo_height()
+            assert app.log.winfo_rooty()+app.log.winfo_height() <= root.winfo_rooty()+root.winfo_height()
             assert app.language_choice.winfo_rootx()+app.language_choice.winfo_width() <= root.winfo_rootx()+root.winfo_width()
     finally:
         dispose(root, app)

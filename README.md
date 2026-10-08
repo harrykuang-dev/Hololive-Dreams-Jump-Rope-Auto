@@ -1,4 +1,4 @@
-# Hololive Dreams Jump Rope Auto — V27
+# Hololive Dreams Jump Rope Auto — 1.0
 
 Windows 上的实时视觉跳绳助手。V27 使用已选定的 `speed2 + snap_clock` 控制核心，按键保持 **25ms**。图形界面参考 [Fishing Auto](https://github.com/harrykuang-dev/Hololive-Dreams-Fishing-Auto)，支持繁體中文、简体中文、English、日本語、한국어和 Indonesian。
 
@@ -6,7 +6,7 @@ Windows 上的实时视觉跳绳助手。V27 使用已选定的 `speed2 + snap_c
 
 ## 使用
 
-运行 `HololiveDreamsJumpRopeAuto-V27.exe`，打开游戏的跳绳游玩入口或成绩页，设定局数后按 **F8** 或点击开始。游戏须在前景，完整位于主屏幕内且无遮挡。EXE 自带运行环境。
+运行 `HololiveDreamsJumpRopeAuto-1.0.exe`，打开游戏的跳绳游玩入口或成绩页，设定局数后按 **F8** 或点击开始。游戏须在前景，完整位于主屏幕内且无遮挡。建议选用深色、短发、装饰少的角色和配饰。EXE 自带运行环境。
 
 - 局数范围 1–999，默认一局；每次开始重新计数。上一局稳定显示成绩页后才开下一局。
 - 可分别设置开始、停止快捷键，默认F8开始、F9停止。点击快捷键栏，再按键录入；更换停止快捷键后只响应新设置。
@@ -49,7 +49,7 @@ python main_ui.py
 python -m pytest -q
 python -m pytest -q -m gui
 python tools/build_release.py
-python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-V27.exe --output build-verification.json
+python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.0.exe --output build-verification.json
 ```
 
 GUI测试使用模拟会话，不操作游戏，但会创建测试窗口，应在没有实战测试运行时执行。构建出的EXE只附带用户指定的显示用Logo，不包含Unity资源包、解包工具、游戏逻辑数据、历史实验程序或录像编码工具。`work/`、`build/`、`dist/`及大型测试资料不进入Git。

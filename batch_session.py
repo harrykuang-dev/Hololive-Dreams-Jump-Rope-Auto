@@ -20,7 +20,7 @@ from jump_rope_bot import BotConfig, JumpRopeBot
 from session_flow import wait_for_result_page
 from vision import GameCapture
 
-APP_VERSION = '0.2.0'
+APP_VERSION = '1.0'
 LOG = logging.getLogger('jump-rope-auto')
 
 
