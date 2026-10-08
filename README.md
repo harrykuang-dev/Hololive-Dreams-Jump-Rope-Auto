@@ -53,10 +53,10 @@ python tools/build_release.py
 python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-V27.exe --output build-verification.json
 ```
 
-GUI测试使用模拟会话，不操作游戏，但会创建测试窗口，应在没有实战测试运行时执行。构建出的EXE不包含解包文件、Unity资源、历史实验程序或录像编码工具。`work/`、`build/`、`dist/`及大型测试资料不进入Git。
+GUI测试使用模拟会话，不操作游戏，但会创建测试窗口，应在没有实战测试运行时执行。构建出的EXE只附带用户指定的显示用Logo，不包含Unity资源包、解包工具、游戏逻辑数据、历史实验程序或录像编码工具。`work/`、`build/`、`dist/`及大型测试资料不进入Git。
 
 历史0.1.0及旧测试CLI的记录保留在 [旧验收](docs/validation-0.1.0.md)和研究目录，仅作历史资料；当前入口是 `main_ui.py`。
 
 ## 许可
 
-程序源码使用 [MIT License](LICENSE)。界面布局和全局快捷键参考 Fishing Auto，保留其 [MIT声明](third_party/fishing-auto-MIT.txt)。图标是代码绘制的原创绳圈。
+程序源码使用 [MIT License](LICENSE)。界面布局和全局快捷键参考 Fishing Auto，保留其 [MIT声明](third_party/fishing-auto-MIT.txt)。显示用Logo及EXE图标采用用户指定的游戏Hopping Rope原图，来源见 [Logo说明](assets/branding.md)；此图不纳入程序源码的MIT授权。

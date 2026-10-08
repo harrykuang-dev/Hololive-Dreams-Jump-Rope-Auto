@@ -36,7 +36,8 @@ def verify(executable: Path, root: Path) -> dict:
         raise ValueError('Archived candidate was accidentally bundled')
     if any(any(token in name.lower() for token in ('gameassembly','unityplayer','resources.assets','globalgamemanagers')) for name in archive.toc):
         raise ValueError('Game content was accidentally bundled')
-    resources = ['LICENSE', 'third_party/fishing-auto-MIT.txt', 'assets/jump-rope.ico']
+    resources = ['LICENSE', 'third_party/fishing-auto-MIT.txt', 'assets/jump-rope.ico',
+                 'assets/hopping-rope-logo.png']
     for name in resources:
         if archive.extract(name.replace('/', '\\')) != (root/name).read_bytes():
             raise ValueError(f'Bundled resource differs from source: {name}')
@@ -54,7 +55,8 @@ def verify(executable: Path, root: Path) -> dict:
             'source_hash_format': 'UTF-8 text with CRLF normalized to LF',
             'bundled_resources_match': resources,
             'archived_candidate_bundled': False,
-            'game_content_bundled': False,
+            'gameplay_assets_bundled': False,
+            'display_only_branding': ['assets/hopping-rope-logo.png', 'assets/jump-rope.ico'],
             'scope': 'Static archive verification; does not launch or control the game'}
 
 

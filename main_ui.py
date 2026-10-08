@@ -118,7 +118,17 @@ class JumpRopeApp:
             widget = ttk.Label(main, style=style, wraplength=self.px(570), justify='left')
             widget.grid(row=row, column=0, sticky='ew', pady=pady)
             setattr(self, name, widget)
-        label('title_label',0,'Title.TLabel')
+        header = ttk.Frame(main)
+        header.grid(row=0,column=0,sticky='ew')
+        header.columnconfigure(1,weight=1)
+        logo = tk.PhotoImage(master=self.root,file=str(
+            Path(__file__).resolve().parent/'assets'/'hopping-rope-logo.png'))
+        self.logo_image = logo.subsample(max(1,round(logo.width()/self.px(128))))
+        self.logo_label = ttk.Label(header,image=self.logo_image)
+        self.logo_label.grid(row=0,column=0,sticky='w',padx=(0,self.px(12)))
+        self.title_label = ttk.Label(header,style='Title.TLabel',
+            wraplength=self.px(390),justify='left')
+        self.title_label.grid(row=0,column=1,sticky='ew')
         label('instructions',1,'Muted.TLabel',(self.px(8),self.px(14)))
         label('status',2,'Muted.TLabel',(0,self.px(8)))
         label('counter',3,'Count.TLabel')
