@@ -22,12 +22,18 @@ def verify_promotion():
         actual = hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
         assert actual == manifest['source_sha256'][name], name
         sources[name] = actual
-    # Entire controller is identical after these explicit recording/import adaptations.
+    # Exact adaptations: recording/import wiring and removal of the fixed F9 stop.
     controller = (ROOT/'jump_rope_bot.py').read_text(encoding='utf-8')
     controller = controller.replace('from v27_detector import VisualPassDetector','from rope_track import VisualPassDetector')
     controller = controller.replace('from diagnostics import RoundDiagnostics as EvidenceRecorder','from evidence import EvidenceRecorder')
     controller = ''.join(line for line in controller.splitlines(keepends=True) if 'self.diagnostic_recorder =' not in line)
-    assert controller == (frozen/'controller/suite_bot.py').read_text(encoding='utf-8')
+    original = (frozen/'controller/suite_bot.py').read_text(encoding='utf-8')
+    original = original.replace("        if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:\n            self.stop_reason = 'F9'\n            return False\n",'')
+    original = original.replace('                if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:\n                    self.stop_reason = "F9"\n                    break\n','')
+    original = original.replace('Original input cooldown, F9, focus and visibility guards remain.',
+                                'Original input cooldown, configured stop, focus and visibility guards remain.')
+    original = original.replace('按 F9 或 Ctrl+C 停止。','按 Ctrl+C 停止。')
+    assert controller == original
     # Only the menu recognizer changed in vision; capture, RoundGate and navigator are identical.
     def without_startup(s):
         a=s.index('class StartupScreen:'); b=s.index('class StartupNavigator:',a)

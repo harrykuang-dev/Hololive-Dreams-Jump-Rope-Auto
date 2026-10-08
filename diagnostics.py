@@ -255,7 +255,7 @@ class RoundDiagnostics:
         (self.directory / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
 
     def package(self, metadata=None, *, limit=ISSUE_LIMIT):
-        """Called only after control/capture ends, including on F9/error."""
+        """Called only after control/capture ends, including on stop/error."""
         if metadata:
             (self.directory / 'performance.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
         note=self.directory/'README.txt'

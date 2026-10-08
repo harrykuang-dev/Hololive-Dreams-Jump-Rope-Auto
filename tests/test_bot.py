@@ -72,7 +72,7 @@ def test_observation_mode_does_not_send_input():
 
 
 @pytest.mark.parametrize('f9', [False, True])
-def test_launch_banner_waits_without_input_and_keeps_f9(monkeypatch, f9):
+def test_launch_banner_waits_without_input_and_has_no_fixed_f9(monkeypatch, f9):
     calls = []
     bot = JumpRopeBot(BotConfig(observe_only=True), sleeper=lambda _: None)
 
@@ -93,8 +93,8 @@ def test_launch_banner_waits_without_input_and_keeps_f9(monkeypatch, f9):
     monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('input under launch banner'))
     bot.run()
     assert bot.tap_count == 0
-    assert len(calls) == (1 if f9 else 3)
-    assert bot.stop_reason == ('F9' if f9 else 'stopped')
+    assert len(calls) == 3
+    assert bot.stop_reason == 'stopped'
 
 
 def test_default_is_single_round_play():
@@ -134,12 +134,13 @@ def test_launch_overlay_deadline_and_no_wait_after_first_frame(
     assert bot.tap_count == 0
 
 
-@pytest.mark.parametrize('outcome', ['fresh', 'timeout', 'F9', 'focus_lost', 'gameplay'])
+@pytest.mark.parametrize('outcome', ['fresh', 'timeout', 'stopped', 'focus_lost', 'gameplay'])
 def test_static_loading_wait_is_bounded_and_never_reuses_pixels(monkeypatch, outcome):
     now, calls = [0.], []
     bot = JumpRopeBot(BotConfig(observe_only=True, wait_for_round=True,
                                 startup_timeout=.25, result_postroll=0),
-                      clock=lambda: now[0], sleeper=lambda t: now.__setitem__(0, now[0]+t))
+                      clock=lambda: now[0], sleeper=lambda t: now.__setitem__(0, now[0]+t),
+                      stop_requested=lambda: bool(calls) and outcome == 'stopped')
     class Capture:
         def __init__(self, _): pass
         def grab(self):
@@ -155,8 +156,7 @@ def test_static_loading_wait_is_bounded_and_never_reuses_pixels(monkeypatch, out
     monkeypatch.setattr(controller, 'GameCapture', Capture)
     monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow',
                         lambda: 456 if calls and outcome == 'focus_lost' else 123)
-    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState',
-                        lambda _: 0x8000 if calls and outcome == 'F9' else 0)
+    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState', lambda _: 0)
     monkeypatch.setattr(bot, 'tap_jump', lambda _: pytest.fail('input without pixels'))
     bot.run()
     assert bot.stop_reason == {'fresh': 'stopped', 'timeout': 'startup_timeout',
@@ -600,7 +600,7 @@ def test_prearmed_round_times_out_on_menu_without_input(monkeypatch, tmp_path):
     assert bot.tap_count == 0
 
 
-@pytest.mark.parametrize('interruption', ['F9', 'focus_lost'])
+@pytest.mark.parametrize('interruption', ['stopped', 'focus_lost'])
 def test_stop_during_result_recording_tail_cancels_batch_restart(monkeypatch, tmp_path, interruption):
     state = {'captures': 0, 'ended': False}
 
@@ -618,13 +618,13 @@ def test_stop_during_result_recording_tail_cancels_batch_restart(monkeypatch, tm
     now = [0.]
     bot = JumpRopeBot(BotConfig(observe_only=True, result_postroll=3,
                                 record_path=tmp_path / 'tail.mp4'),
-                      clock=lambda: now[0], sleeper=lambda t: now.__setitem__(0, now[0]+t))
+                      clock=lambda: now[0], sleeper=lambda t: now.__setitem__(0, now[0]+t),
+                      stop_requested=lambda: state['ended'] and interruption == 'stopped')
     monkeypatch.setattr(bot, 'focus_game', lambda: setattr(bot, '_hwnd', 123) or 123)
     monkeypatch.setattr(controller, 'GameCapture', Capture)
     monkeypatch.setattr(controller.win32gui, 'GetForegroundWindow',
                         lambda: 456 if state['ended'] and interruption == 'focus_lost' else 123)
-    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState',
-                        lambda _: 0x8000 if state['ended'] and interruption == 'F9' else 0)
+    monkeypatch.setattr(controller.win32api, 'GetAsyncKeyState', lambda _: 0)
     monkeypatch.setattr(controller.win32api, 'mouse_event', lambda *args: pytest.fail('unexpected input'))
     bot.run()
     assert bot.stop_reason == interruption

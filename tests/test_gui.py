@@ -129,8 +129,12 @@ def test_start_shortcut_cannot_conflict_with_stop_and_never_runs_during_capture(
         app.capture_key(SimpleNamespace(keysym='F7',state=0,keycode=0x76))
         assert app.start_key.get() == 'F7'
         assert not app._capturing
+        app.stop_key.set('F6')
+        app.begin_start_capture()
+        app.capture_key(SimpleNamespace(keysym='F9',state=0,keycode=0x78))
+        assert app.start_key.get() == 'F9'
         app.set_controls(True)
-        app.hotkey.configure.assert_called_with(value='F7',enabled=False)
+        app.hotkey.configure.assert_called_with(value='F9',enabled=False)
     finally:
         dispose(root,app)
 

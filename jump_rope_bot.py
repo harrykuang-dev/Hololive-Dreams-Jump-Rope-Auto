@@ -213,9 +213,6 @@ class JumpRopeBot:
         if self._stopped():
             self.stop_reason = 'stopped'
             return False
-        if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
-            self.stop_reason = 'F9'
-            return False
         if win32gui.GetForegroundWindow() != self._hwnd:
             self.stop_reason = 'focus_lost'
             return False
@@ -259,9 +256,6 @@ class JumpRopeBot:
                 loop_started = self._clock()
                 if recorder is not None:
                     recorder.check_health()
-                if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
-                    self.stop_reason = "F9"
-                    break
                 if win32gui.GetForegroundWindow() != self._hwnd:
                     LOG.info("遊戲失去焦點，停止輸入")
                     self.stop_reason = "focus_lost"
@@ -270,7 +264,7 @@ class JumpRopeBot:
                     frame = capture.grab()
                 except RecoveredFrameGap:
                     # No cached pixels or pre-gap candidate can survive recovery.
-                    # Original input cooldown, F9, focus and visibility guards remain.
+                    # Original input cooldown, configured stop, focus and visibility guards remain.
                     detector = VisualPassDetector()
                     LOG.warning('DXGI 短暫空檔已恢復，重建識別狀態；本次不輸入')
                     continue
@@ -583,7 +577,7 @@ def main() -> int:
     bot = JumpRopeBot(BotConfig(observe_only=args.observe, record_path=args.record))
     try:
         print("只觀察，不輸入" if args.observe else "開始單局視覺跳繩（尚未驗證100下）")
-        print("按 F9 或 Ctrl+C 停止。")
+        print("按 Ctrl+C 停止。")
         bot.run(args.duration)
     except KeyboardInterrupt:
         bot.stop()

@@ -74,12 +74,22 @@ def test_prestart_stop_is_not_cleared_by_bot_run(mutex, monkeypatch):
     assert not bot.running
 
 
-def test_f9_remains_available_with_custom_shortcut(mutex):
-    session = BatchSession(SessionConfig(stop_hotkey='Ctrl+Alt+Q'),
-                           get_key_state=lambda key: 0x8000 if key == 0x78 else 0)
+@pytest.mark.parametrize('hotkey,held,stopped', [
+    ('F9', {0x78}, True),
+    ('Ctrl+Alt+Q', {0x78}, False),
+    ('Ctrl+Alt+Q', {0x11,0x12,0x51}, True),
+    ('Ctrl+Alt+Q', {0x51}, False),
+])
+def test_only_configured_shortcut_stops_session(mutex, hotkey, held, stopped):
+    bot = SimpleNamespace(run=lambda: None,tap_count=0,stop_reason='round_finished',
+                          round_started_at=1,_hwnd=999)
+    session = BatchSession(SessionConfig(stop_hotkey=hotkey),
+                           bot_factory=lambda *_a,**_kw:bot,
+                           get_key_state=lambda key: 0x8000 if key in held else 0)
     session.run()
     assert session.current_bot is None
-    assert session.stop_reason == 'stopped'
+    assert session.stop_reason == ('stopped' if stopped else 'round_finished')
+    assert session.completed_rounds == (0 if stopped else 1)
     assert mutex == [123]
 
 

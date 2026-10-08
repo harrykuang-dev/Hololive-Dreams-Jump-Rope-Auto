@@ -33,13 +33,10 @@ class SessionConfig:
     rounds: int = 1
     stop_hotkey: str = 'F9'
     diagnostics: bool = False
-    observe_only: bool = False
 
     def validate(self):
         if type(self.rounds) is not int or not 1 <= self.rounds <= 999:
             raise ValueError('Round limit must be an integer from 1 to 999')
-        if self.observe_only and self.rounds != 1:
-            raise ValueError('Observation is limited to one manually started round')
         parse_stop_hotkey(self.stop_hotkey)
 
 
@@ -69,7 +66,7 @@ class BatchSession:
 
     def _stopped(self):
         pressed = lambda key: bool(self._get_key_state(key) & 0x8000)
-        return (self.stop_event.is_set() or pressed(0x78) or
+        return (self.stop_event.is_set() or
                 (pressed(self._key) and all(pressed(m) for m in self._modifiers)))
 
     def stop(self):
@@ -95,7 +92,6 @@ class BatchSession:
                             'baseline': 'V27', 'key_down_ms': 25,
                             'startup_recognizer': 'pill_geometry_v1',
                             'capture_backend': 'dxgi', 'target_fps': 60,
-                            'observe_only': self.config.observe_only,
                             'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest() if executable else None}
                 (self.directory / 'session.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
                 handler = logging.FileHandler(self.directory / 'session.log', encoding='utf-8')
@@ -110,11 +106,11 @@ class BatchSession:
                 self.notify('round', (index, self.config.rounds))
                 path = self.directory / f'round-{index:02d}.mp4' if self.directory else None
                 bot = self._bot_factory(BotConfig(
-                    record_path=path, observe_only=self.config.observe_only,
-                    wait_for_round=True, auto_start=not self.config.observe_only,
+                    record_path=path,
+                    wait_for_round=True, auto_start=True,
                     capture_backend='dxgi', target_fps=60, startup_timeout=120,
                     key_down_time=.025, diagnostics_enabled=self.config.diagnostics,
-                    round_timeout=10 if self.config.observe_only else 180,
+                    round_timeout=180,
                     result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped)
                 with self._count_lock:
                     self.current_bot = bot

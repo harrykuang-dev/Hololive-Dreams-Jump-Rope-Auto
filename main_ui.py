@@ -75,7 +75,6 @@ class JumpRopeApp:
         self.start_key = tk.StringVar(root, value='F8')
         self.start_shortcut_display = tk.StringVar(root, value='F8')
         self.diagnostics = tk.BooleanVar(root, value=False)
-        self.observe_only = tk.BooleanVar(root, value=False)
         self._build()
         self.apply_language()
         self.hotkey = GlobalHotkey(lambda:self.messages.put(('start_hotkey', self._hotkey_generation)),
@@ -87,7 +86,6 @@ class JumpRopeApp:
         self.logger.setLevel(logging.INFO)
         self.logger.addHandler(self.log_handler)
         root.bind('<Button-1>', self._cancel_capture, add='+')
-        root.bind('<F9>', lambda _: self.stop())
         root.after(100, self.poll)
 
     def px(self, value):
@@ -157,8 +155,6 @@ class JumpRopeApp:
         self.shortcut_entry.bind('<Button-1>',self.begin_capture)
         self.shortcut_entry.bind('<FocusOut>',self.end_capture)
         self.shortcut_entry.bind('<KeyPress>',self.capture_key)
-        self.key_hint = ttk.Label(form,style='Muted.TLabel')
-        self.key_hint.grid(row=5,column=1,sticky='w')
         controls = ttk.Frame(main)
         controls.grid(row=6,column=0,sticky='ew',pady=(self.px(14),self.px(12)))
         controls.columnconfigure((0,1),weight=1,uniform='actions')
@@ -172,8 +168,6 @@ class JumpRopeApp:
         self.diagnostics_check.grid(row=0,column=0,sticky='w')
         self.help_button = ttk.Button(options,text='?',width=3,command=self.show_help)
         self.help_button.grid(row=0,column=1,padx=self.px(6))
-        self.observe_check = ttk.Checkbutton(options,variable=self.observe_only)
-        self.observe_check.grid(row=1,column=0,columnspan=2,sticky='w',pady=(self.px(3),self.px(8)))
         label('log_title',8,'TLabel',(self.px(8),self.px(6)))
         logs = ttk.Frame(main)
         logs.grid(row=9,column=0,sticky='nsew')
@@ -189,8 +183,8 @@ class JumpRopeApp:
         self.root.title(f'Hololive Dreams — {self.tr("title")} v{APP_VERSION}')
         for widget,key in ((self.title_label,'title'),(self.instructions,'instructions'),
                 (self.language_label,'language'),(self.rounds_label,'rounds'),(self.round_hint,'round_hint'),
-                (self.shortcut_label,'shortcut'),(self.start_shortcut_label,'start_shortcut'),(self.key_hint,'key_hint'),(self.start_button,'start'),
-                (self.stop_button,'stop'),(self.diagnostics_check,'diagnostics'),(self.observe_check,'observe'),
+                (self.shortcut_label,'shortcut'),(self.start_shortcut_label,'start_shortcut'),(self.start_button,'start'),
+                (self.stop_button,'stop'),(self.diagnostics_check,'diagnostics'),
                 (self.log_title,'log'),(self.footer,'footer')):
             widget.configure(text=self.tr(key))
         if not self.worker or not self.worker.is_alive():
@@ -244,7 +238,7 @@ class JumpRopeApp:
             stop = value if self._capture_target == 'stop' else self.stop_key.get()
             sm,sk = parse_stop_hotkey(start)
             tm,tk = parse_stop_hotkey(stop)
-            if (sk == tk and set(sm) == set(tm)) or sk == 0x78:
+            if sk == tk and set(sm) == set(tm):
                 return 'break'
             (self.start_key if self._capture_target == 'start' else self.stop_key).set(value)
             self.end_capture()
@@ -259,7 +253,7 @@ class JumpRopeApp:
         self.shortcut_entry.configure(state='disabled' if running else 'readonly')
         self.start_shortcut_entry.configure(state='disabled' if running else 'readonly')
         self.hotkey.configure(value=self.start_key.get(),enabled=not running and not self._closing)
-        for widget in (self.target_entry,self.diagnostics_check,self.observe_check,self.help_button):
+        for widget in (self.target_entry,self.diagnostics_check,self.help_button):
             widget.configure(state='disabled' if running else 'normal')
 
     def append_log(self,message):
@@ -277,7 +271,7 @@ class JumpRopeApp:
             return
         try:
             config = SessionConfig(rounds=int(self.target.get()),stop_hotkey=self.stop_key.get(),
-                                   diagnostics=self.diagnostics.get(),observe_only=self.observe_only.get())
+                                   diagnostics=self.diagnostics.get())
             config.validate()
         except ValueError:
             messagebox.showerror(self.tr('error'),self.tr('invalid'),parent=self.root)
@@ -347,16 +341,31 @@ class JumpRopeApp:
         dialog.transient(self.root)
         panel = ttk.Frame(dialog,padding=self.px(20))
         panel.pack(fill='both',expand=True)
-        ttk.Label(panel,text=self.tr('help'),wraplength=self.px(520),justify='left').pack(anchor='w')
-        ttk.Label(panel,text=str(diagnostic_base()),wraplength=self.px(520),style='Muted.TLabel').pack(anchor='w',pady=self.px(12))
-        ttk.Button(panel,text=self.tr('folder'),command=self.open_diagnostics).pack(anchor='w')
-        ttk.Button(panel,text=self.tr('project'),command=lambda:webbrowser.open(PROJECT_URL)).pack(anchor='w',pady=self.px(8))
-        ttk.Button(panel,text=self.tr('close'),command=dialog.destroy).pack(anchor='e')
+        self.help_dialog = dialog
+        wrap = self.px(620)
+        def paragraph(value, pady=0):
+            ttk.Label(panel,text=value,wraplength=wrap,justify='left').pack(anchor='w',pady=pady)
+        def link(value, command):
+            widget = ttk.Label(panel,text=value,wraplength=wrap,justify='left',
+                foreground=self.BLUE,cursor='hand2',font=('Segoe UI',11,'underline'),takefocus=True)
+            widget.pack(anchor='w',pady=(0,self.px(16)))
+            widget.bind('<Button-1>',lambda _:command())
+            widget.bind('<Return>',lambda _:command())
+        paragraph(self.tr('help'),(self.px(8),self.px(20)))
+        paragraph(self.tr('help_location'),(0,self.px(8)))
+        link(str(self.diagnostics_directory()),self.open_diagnostics)
+        paragraph(self.tr('help_usage'),(0,self.px(20)))
+        paragraph(self.tr('help_project'),(0,self.px(8)))
+        link(PROJECT_URL,lambda:webbrowser.open(PROJECT_URL))
+        ttk.Button(panel,text=self.tr('close'),width=12,command=dialog.destroy).pack(anchor='e',pady=(self.px(8),0))
         dialog.bind('<Escape>',lambda _:dialog.destroy())
         dialog.grab_set()
 
+    def diagnostics_directory(self):
+        return self.session.directory if self.session and self.session.directory else diagnostic_base()
+
     def open_diagnostics(self):
-        directory = self.session.directory if self.session and self.session.directory else diagnostic_base()
+        directory = self.diagnostics_directory()
         directory.mkdir(parents=True,exist_ok=True)
         os.startfile(str(directory))
 
