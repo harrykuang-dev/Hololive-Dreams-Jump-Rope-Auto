@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) · [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md)
 
-A jump-rope assistant for the Windows version of *hololive Dreams*. It tracks the rope from the game screen, jumps through ordinary mouse input, and starts another round after the result screen.
+A jump-rope program for the Windows version of *hololive Dreams*. It tracks the rope from the game screen, jumps through ordinary mouse input, and starts another round after the result screen.
 
 ## Download
 
@@ -14,7 +14,7 @@ Run the single EXE; Python is not required. A SHA-256 checksum is included. Sour
 
 - Tracks rope movement and automatically times jumps.
 - Recognizes start and result menus and continues after a completed round.
-- Six interface languages: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, and Indonesian. Changing the assistant language does not change the game settings.
+- Six interface languages: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, and Indonesian. Changing the program language does not change the game settings.
 - Configurable round target; stops when reached and resets the count on each start.
 - Default shortcuts: F8 to start, F9 to stop. Click a shortcut field and press a key or key combination to change it. Start and stop shortcuts must differ.
 - Activity log and optional local developer diagnostics.
@@ -22,9 +22,9 @@ Run the single EXE; Python is not required. A SHA-256 checksum is included. Sour
 ## Usage
 
 1. Open the game at the jump-rope start or result screen.
-2. Run the EXE and choose an assistant language under Language.
+2. Run the EXE and choose an program language under Language.
 3. Set a target of 1–999 rounds; the default is 1. Change shortcuts by clicking their fields and pressing the desired keys.
-4. Click Start or press the start shortcut. The assistant attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Juufuutei Raden (default outfit)** with pixel sunglasses.
+4. Click Start or press the start shortcut. The program attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Juufuutei Raden (default outfit)** with pixel sunglasses.
 5. Press the stop shortcut, click Stop, or switch windows to stop. Starting again resets the count.
 
 ## Requirements and limitations
@@ -37,16 +37,16 @@ Jump inputs shown in the interface are input counts; read the actual score on th
 
 ### Capture errors on dual-GPU computers
 
-If starting produces `-2005270524 / 0x887A0004` (the specified device interface or feature level is not supported), adjust the assistant's GPU preference:
+If starting produces `-2005270524 / 0x887A0004` (the specified device interface or feature level is not supported), adjust the program's GPU preference:
 
 ![DXGI capture error message](docs/dxgi-unsupported-error.png)
 
 1. Open Windows Settings → System → Display → Advanced display, select the primary monitor used for the game, and note the GPU shown under “Connected to.”
 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.0.exe` you run.
 3. Open its Options / GPU preference, select the GPU identified above, and save. “Power saving” usually refers to the integrated GPU and “High performance” to the discrete GPU; check the GPU names shown.
-4. Fully close and reopen the assistant, then click Start to test.
+4. Fully close and reopen the program, then click Start to test.
 
-Apply this setting to the assistant EXE. Internal and external displays, discrete-only mode, and hybrid mode can use different display GPUs; choose based on the current display connection. If it still fails, enable Developer mode, reproduce once, and provide `session.log` from that run's folder, your GPU models, and display connection details.
+Apply this setting to the program EXE. Internal and external displays, discrete-only mode, and hybrid mode can use different display GPUs; choose based on the current display connection. If it still fails, enable Developer mode, reproduce once, and provide `session.log` from that run's folder, your GPU models, and display connection details.
 
 ## Technical implementation
 

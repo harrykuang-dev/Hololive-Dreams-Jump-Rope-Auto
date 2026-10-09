@@ -2,7 +2,7 @@
 
 [繁體中文](README.md) · [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md)
 
-Asisten lompat tali untuk *hololive Dreams* versi Windows. Program mengenali posisi tali dari layar game, melompat melalui input mouse biasa, lalu melanjutkan ke ronde berikutnya setelah layar hasil.
+Program lompat tali untuk *hololive Dreams* versi Windows. Program mengenali posisi tali dari layar game, melompat melalui input mouse biasa, lalu melanjutkan ke ronde berikutnya setelah layar hasil.
 
 ## Unduh
 
@@ -14,7 +14,7 @@ Cukup jalankan satu EXE ini; tidak perlu memasang Python. Tersedia berkas checks
 
 - Melacak gerakan tali dan menentukan waktu lompatan secara otomatis.
 - Mengenali menu mulai dan hasil, lalu melanjutkan setelah ronde selesai.
-- Mendukung enam bahasa antarmuka: Mandarin Tradisional, Mandarin Sederhana, Inggris, Jepang, Korea, dan Indonesia. Bahasa asisten tidak mengubah pengaturan game.
+- Mendukung enam bahasa antarmuka: Mandarin Tradisional, Mandarin Sederhana, Inggris, Jepang, Korea, dan Indonesia. Bahasa program tidak mengubah pengaturan game.
 - Target ronde dapat diatur; program berhenti saat target tercapai dan mengatur ulang hitungan setiap kali dimulai.
 - Pintasan bawaan: F8 untuk mulai, F9 untuk berhenti. Klik kolom pintasan lalu tekan tombol atau kombinasi tombol baru. Pintasan mulai dan berhenti harus berbeda.
 - Riwayat aktivitas dan mode diagnostik lokal opsional.
@@ -22,9 +22,9 @@ Cukup jalankan satu EXE ini; tidak perlu memasang Python. Tersedia berkas checks
 ## Cara menggunakan
 
 1. Buka layar mulai atau hasil lompat tali di game.
-2. Jalankan EXE dan pilih bahasa asisten pada Bahasa/Language.
+2. Jalankan EXE dan pilih bahasa program pada Bahasa/Language.
 3. Atur target 1–999 ronde; nilai bawaan adalah 1. Untuk mengganti pintasan, klik kolomnya lalu tekan tombol yang diinginkan.
-4. Klik Mulai atau tekan pintasan mulai. Asisten mencoba membawa game ke depan. Pastikan seluruh game terlihat tanpa halangan pada monitor utama. Pilih karakter berwarna gelap, berambut pendek, dengan sedikit hiasan dan aksesori, misalnya **Juufuutei Raden (kostum bawaan)** dengan pixel sunglasses.
+4. Klik Mulai atau tekan pintasan mulai. Program mencoba membawa game ke depan. Pastikan seluruh game terlihat tanpa halangan pada monitor utama. Pilih karakter berwarna gelap, berambut pendek, dengan sedikit hiasan dan aksesori, misalnya **Juufuutei Raden (kostum bawaan)** dengan pixel sunglasses.
 5. Tekan pintasan berhenti, klik Berhenti, atau pindah jendela untuk menghentikan program. Mulai kembali akan mengatur ulang hitungan.
 
 ## Persyaratan dan batasan
@@ -37,16 +37,16 @@ Input lompat pada antarmuka adalah jumlah input; lihat skor sebenarnya pada laya
 
 ### Kesalahan tangkapan pada komputer dengan dua GPU
 
-Jika saat mulai muncul `-2005270524 / 0x887A0004` (antarmuka perangkat atau tingkat fitur yang ditentukan tidak didukung), ubah preferensi GPU asisten:
+Jika saat mulai muncul `-2005270524 / 0x887A0004` (antarmuka perangkat atau tingkat fitur yang ditentukan tidak didukung), ubah preferensi GPU program:
 
 ![Pesan kesalahan tangkapan DXGI](docs/dxgi-unsupported-error.png)
 
 1. Buka Pengaturan Windows → Sistem → Tampilan → Tampilan tingkat lanjut, pilih monitor utama yang digunakan untuk game, lalu periksa nama GPU pada “Terhubung ke.”
 2. Kembali ke Tampilan → Grafis (“Pengaturan grafis” pada Windows 10), tambahkan aplikasi desktop, lalu pilih `HololiveDreamsJumpRopeAuto-1.0.exe` yang benar-benar dijalankan.
 3. Buka Opsi / Preferensi GPU aplikasi, pilih GPU di atas, lalu simpan. “Hemat daya” biasanya merujuk ke GPU terintegrasi dan “Kinerja tinggi” ke GPU diskret; periksa nama GPU yang ditampilkan.
-4. Tutup asisten sepenuhnya, buka kembali, lalu klik Mulai untuk menguji.
+4. Tutup program sepenuhnya, buka kembali, lalu klik Mulai untuk menguji.
 
-Terapkan pengaturan ini pada EXE asisten. Layar internal dan monitor eksternal, mode GPU diskret langsung, serta mode hibrida dapat memakai GPU keluaran yang berbeda; pilih berdasarkan koneksi layar saat ini. Jika masih gagal, aktifkan Mode pengembang, reproduksi sekali, lalu sertakan `session.log` dari folder sesi tersebut, model GPU, dan informasi koneksi layar.
+Terapkan pengaturan ini pada EXE program. Layar internal dan monitor eksternal, mode GPU diskret langsung, serta mode hibrida dapat memakai GPU keluaran yang berbeda; pilih berdasarkan koneksi layar saat ini. Jika masih gagal, aktifkan Mode pengembang, reproduksi sekali, lalu sertakan `session.log` dari folder sesi tersebut, model GPU, dan informasi koneksi layar.
 
 ## Implementasi teknis
 
