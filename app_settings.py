@@ -52,7 +52,8 @@ def captured_hotkey(keysym,state=0,keycode=0):
         key = aliases.get(keysym,keysym)
     modifiers = []
     if state&0x04: modifiers.append('Ctrl')
-    if state&0x20008: modifiers.append('Alt')
+    # Windows Tk uses 0x8 for Num Lock, not Alt (the X11 Mod1 bit).
+    if state&0x20000: modifiers.append('Alt')
     if state&0x01: modifiers.append('Shift')
     value = '+'.join([*modifiers,key])
     try: parse_stop_hotkey(value)

@@ -151,3 +151,26 @@ def test_queued_shortcut_from_before_settings_capture_is_discarded(root):
         factory.assert_not_called()
     finally:
         dispose(root,app)
+
+
+@pytest.mark.parametrize('target,key,expected', [
+    ('start', SimpleNamespace(keysym='F7',state=0x8,keycode=0x76), 'F7'),
+    ('stop', SimpleNamespace(keysym='F7',state=0x8,keycode=0x76), 'F7'),
+    ('start', SimpleNamespace(keysym='q',state=0x2000C,keycode=0x51), 'Ctrl+Alt+Q'),
+    ('stop', SimpleNamespace(keysym='q',state=0x2000C,keycode=0x51), 'Ctrl+Alt+Q'),
+])
+def test_both_shortcut_fields_ignore_num_lock_and_preserve_real_alt(root, target, key, expected):
+    root.withdraw()
+    app = main_ui.JumpRopeApp(root)
+    try:
+        if target == 'start':
+            app.begin_start_capture()
+        else:
+            app.begin_capture()
+        assert app.capture_key(key) == 'break'
+        variable = app.start_key if target == 'start' else app.stop_key
+        display = app.start_shortcut_display if target == 'start' else app.shortcut_display
+        assert variable.get() == display.get() == expected
+        assert not app._capturing
+    finally:
+        dispose(root, app)
