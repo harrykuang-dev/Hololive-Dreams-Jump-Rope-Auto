@@ -38,13 +38,13 @@ Jump inputs shown in the interface are input counts; read the actual score on th
 > [!WARNING]
 > **Capture errors on dual-GPU computers**
 >
-> If starting produces `-2005270524 / 0x887A0004` (the specified device interface or feature level is not supported), adjust the program's GPU preference:
+> If starting produces `-2005270524 / 0x887A0004` (The specified device interface or feature level is not supported on this system.), adjust the program's GPU preference:
 >
 > ![DXGI capture error message](docs/dxgi-unsupported-error.png)
 >
-> 1. Open Windows Settings → System → Display → Advanced display, select the primary monitor used for the game, and note the GPU shown under “Connected to.”
+> 1. Open Windows Settings → System → Display → Advanced display, select the primary monitor used for the game, and note the name of the GPU connected to that monitor.
 > 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.0.exe` you run.
-> 3. Open its Options / GPU preference, select the GPU identified above, and save. “Power saving” usually refers to the integrated GPU and “High performance” to the discrete GPU; check the GPU names shown.
+> 3. Select Options, choose the GPU identified above under Graphics preference, and select Save. “Power saving” usually refers to the integrated GPU and “High performance” to the discrete GPU; check the GPU names shown.
 > 4. Fully close and reopen the program, then click Start to test.
 >
 > Apply this setting to the program EXE. Internal and external displays, discrete-only mode, and hybrid mode can use different display GPUs; choose based on the current display connection. If it still fails, enable Developer mode, reproduce once, and provide `session.log` from that run's folder, your GPU models, and display connection details.
