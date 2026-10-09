@@ -35,18 +35,19 @@ Naikkan pengaturan grafis setinggi mungkin selama game tetap stabil pada 60 FPS.
 
 Input lompat pada antarmuka adalah jumlah input; lihat skor sebenarnya pada layar hasil game. Warna karakter, animasi, resolusi, kinerja komputer, dan pembaruan game dapat memengaruhi pengenalan. Hentikan program dan berikan data diagnostik jika terjadi masalah.
 
-### Kesalahan tangkapan pada komputer dengan dua GPU
-
-Jika saat mulai muncul `-2005270524 / 0x887A0004` (antarmuka perangkat atau tingkat fitur yang ditentukan tidak didukung), ubah preferensi GPU program:
-
-![Pesan kesalahan tangkapan DXGI](docs/dxgi-unsupported-error.png)
-
-1. Buka Pengaturan Windows → Sistem → Tampilan → Tampilan tingkat lanjut, pilih monitor utama yang digunakan untuk game, lalu periksa nama GPU pada “Terhubung ke.”
-2. Kembali ke Tampilan → Grafis (“Pengaturan grafis” pada Windows 10), tambahkan aplikasi desktop, lalu pilih `HololiveDreamsJumpRopeAuto-1.0.exe` yang benar-benar dijalankan.
-3. Buka Opsi / Preferensi GPU aplikasi, pilih GPU di atas, lalu simpan. “Hemat daya” biasanya merujuk ke GPU terintegrasi dan “Kinerja tinggi” ke GPU diskret; periksa nama GPU yang ditampilkan.
-4. Tutup program sepenuhnya, buka kembali, lalu klik Mulai untuk menguji.
-
-Terapkan pengaturan ini pada EXE program. Layar internal dan monitor eksternal, mode GPU diskret langsung, serta mode hibrida dapat memakai GPU keluaran yang berbeda; pilih berdasarkan koneksi layar saat ini. Jika masih gagal, aktifkan Mode pengembang, reproduksi sekali, lalu sertakan `session.log` dari folder sesi tersebut, model GPU, dan informasi koneksi layar.
+> [!WARNING]
+> **Kesalahan tangkapan pada komputer dengan dua GPU**
+>
+> Jika saat mulai muncul `-2005270524 / 0x887A0004` (antarmuka perangkat atau tingkat fitur yang ditentukan tidak didukung), ubah preferensi GPU program:
+>
+> ![Pesan kesalahan tangkapan DXGI](docs/dxgi-unsupported-error.png)
+>
+> 1. Buka Pengaturan Windows → Sistem → Tampilan → Tampilan tingkat lanjut, pilih monitor utama yang digunakan untuk game, lalu periksa nama GPU pada “Terhubung ke.”
+> 2. Kembali ke Tampilan → Grafis (“Pengaturan grafis” pada Windows 10), tambahkan aplikasi desktop, lalu pilih `HololiveDreamsJumpRopeAuto-1.0.exe` yang benar-benar dijalankan.
+> 3. Buka Opsi / Preferensi GPU aplikasi, pilih GPU di atas, lalu simpan. “Hemat daya” biasanya merujuk ke GPU terintegrasi dan “Kinerja tinggi” ke GPU diskret; periksa nama GPU yang ditampilkan.
+> 4. Tutup program sepenuhnya, buka kembali, lalu klik Mulai untuk menguji.
+>
+> Terapkan pengaturan ini pada EXE program. Layar internal dan monitor eksternal, mode GPU diskret langsung, serta mode hibrida dapat memakai GPU keluaran yang berbeda; pilih berdasarkan koneksi layar saat ini. Jika masih gagal, aktifkan Mode pengembang, reproduksi sekali, lalu sertakan `session.log` dari folder sesi tersebut, model GPU, dan informasi koneksi layar.
 
 ## Implementasi teknis
 
