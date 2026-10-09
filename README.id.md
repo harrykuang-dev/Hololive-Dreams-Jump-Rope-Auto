@@ -24,7 +24,7 @@ Cukup jalankan satu EXE ini; tidak perlu memasang Python. Tersedia berkas checks
 1. Buka layar mulai atau hasil lompat tali di game.
 2. Jalankan EXE dan pilih bahasa asisten pada Bahasa/Language.
 3. Atur target 1–999 ronde; nilai bawaan adalah 1. Untuk mengganti pintasan, klik kolomnya lalu tekan tombol yang diinginkan.
-4. Klik Mulai atau tekan pintasan mulai. Asisten mencoba membawa game ke depan. Pastikan seluruh game terlihat tanpa halangan pada monitor utama. Pilih karakter berwarna gelap, berambut pendek, dengan sedikit hiasan dan aksesori, misalnya **Ina** dengan pixel sunglasses.
+4. Klik Mulai atau tekan pintasan mulai. Asisten mencoba membawa game ke depan. Pastikan seluruh game terlihat tanpa halangan pada monitor utama. Pilih karakter berwarna gelap, berambut pendek, dengan sedikit hiasan dan aksesori, misalnya **Juufuutei Raden (kostum bawaan)** dengan pixel sunglasses.
 5. Tekan pintasan berhenti, klik Berhenti, atau pindah jendela untuk menghentikan program. Mulai kembali akan mengatur ulang hitungan.
 
 ## Persyaratan dan batasan
@@ -41,7 +41,7 @@ Input lompat pada antarmuka adalah jumlah input; lihat skor sebenarnya pada laya
 
 [Modul tangkapan](vision.py) memakai DXGI／DXcam untuk mengambil frame baru dari area klien game, dengan pemeriksaan fokus, posisi, ukuran, dan halangan sebelum serta sesudah pengambilan. Loop kontrol menargetkan 60 FPS; laju sebenarnya bergantung pada frame baru game, biaya pengenalan, dan penjadwalan sistem. Frame lama tidak digunakan untuk melompat ketika frame baru tidak tersedia. Setelah jeda tangkapan setidaknya 100ms, frame pemulihan dibuang dan detektor diatur ulang. Jika tidak ada frame baru dalam 500ms, program berhenti.
 
-[Pemrosesan area](priority.py) menggunakan acuan pengenalan 960×540. Area sampel dipotong sebelum diubah ukurannya dengan skala semula. Batas potongan mengikuti rasio bilangan bulat antara resolusi masukan dan keluaran agar posisi sampel tetap sama sekaligus mengurangi pemrosesan piksel yang tidak diperlukan. Pengaturan grafis game berbeda dari resolusi detektor.
+[Pemrosesan area](priority.py) menggunakan acuan pengenalan 960×540. Area sampel dipotong sebelum diubah ukurannya dengan skala semula. Batas potongan mengikuti rasio bilangan bulat antara resolusi masukan dan keluaran agar posisi sampel tetap sama sekaligus mengurangi pemrosesan piksel yang tidak diperlukan.
 
 ### Pengenalan tali dan pencocokan kurva
 
@@ -53,7 +53,7 @@ Kurva terpilih menghasilkan tinggi tali relatif terhadap pemain, proporsi dukung
 
 [Detektor](jump_detector.py) memakai keadaan mendekat, melintas, menjauh, dan berbalik pada tali rendah untuk menentukan apakah satu lintasan sudah memicu input. Untuk mengaktifkan kembali lompatan setelah terhalang, program memeriksa potongan yang terlihat secara berurutan, dukungan kedua sisi, dan perubahan tinggi agar lintasan yang sama tidak memicu input berulang.
 
-Pemeriksaan perubahan mendadak memisahkan waktu pengamatan terakhir yang sebenarnya dari waktu posisi terakhir yang diterima. Kurva dengan dukungan sebagian yang tiba-tiba mendekati pemain tidak diterima hanya karena posisi tersimpan sudah lama. Tiga pengamatan mentah terbaru yang menunjukkan pendekatan konsisten dan meyakinkan dapat mengembalikan evaluasi normal. Ini tidak menambahkan penundaan tetap tiga frame pada setiap lompatan.
+Pemeriksaan perubahan mendadak memisahkan waktu pengamatan terakhir yang sebenarnya dari waktu posisi terakhir yang diterima. Kurva dengan dukungan sebagian yang tiba-tiba mendekati pemain tidak diterima hanya karena posisi tersimpan sudah lama. Tiga pengamatan mentah terbaru yang menunjukkan pendekatan konsisten dan meyakinkan dapat mengembalikan evaluasi normal.
 
 ### Input, menu, dan kelanjutan ronde
 

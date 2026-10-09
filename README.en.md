@@ -24,7 +24,7 @@ Run the single EXE; Python is not required. A SHA-256 checksum is included. Sour
 1. Open the game at the jump-rope start or result screen.
 2. Run the EXE and choose an assistant language under Language.
 3. Set a target of 1–999 rounds; the default is 1. Change shortcuts by clicking their fields and pressing the desired keys.
-4. Click Start or press the start shortcut. The assistant attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Ina** with pixel sunglasses.
+4. Click Start or press the start shortcut. The assistant attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Juufuutei Raden (default outfit)** with pixel sunglasses.
 5. Press the stop shortcut, click Stop, or switch windows to stop. Starting again resets the count.
 
 ## Requirements and limitations
@@ -41,7 +41,7 @@ Jump inputs shown in the interface are input counts; read the actual score on th
 
 The [capture module](vision.py) uses DXGI/DXcam to acquire new frames from the game client area, checking focus, position, size, and occlusion before and after capture. The control loop targets 60 FPS; its actual rate depends on new game frames, recognition cost, and system scheduling. Missing frames never authorize jumping from old pixels. After a capture gap of at least 100ms, the recovery frame is discarded and the detector is reset. If no new frame arrives within 500ms, operation stops.
 
-[Region processing](priority.py) uses a 960×540 recognition reference. It crops the sampling area before resizing at the original scale. Crop boundaries align with the integer ratio between input and output resolutions to preserve sample positions while reducing unnecessary pixel processing. Increasing game graphics settings is separate from increasing detector resolution.
+[Region processing](priority.py) uses a 960×540 recognition reference. It crops the sampling area before resizing at the original scale. Crop boundaries align with the integer ratio between input and output resolutions to preserve sample positions while reducing unnecessary pixel processing.
 
 ### Rope recognition and curve fitting
 
@@ -53,7 +53,7 @@ The selected curve yields rope height relative to the player, visible support, d
 
 The [detector](jump_detector.py) uses visible approach, crossing, retreat, and low-rope turning states to track whether a pass has already triggered. Rearming after occlusion checks consecutive visible fragments, support on both sides, and height changes to limit repeated triggers for the same pass.
 
-The geometry-jump guard separates the last actual observation time from the last accepted-position time. A partially supported fit that suddenly moves toward the player is not accepted just because the stored position is old. Three recent raw observations showing a credible, coherent approach allow normal evaluation to resume; this does not add a fixed three-frame wait to every jump.
+The geometry-jump guard separates the last actual observation time from the last accepted-position time. A partially supported fit that suddenly moves toward the player is not accepted just because the stored position is old. Three recent raw observations showing a credible, coherent approach allow normal evaluation to resume.
 
 ### Input, menus, and round continuation
 
