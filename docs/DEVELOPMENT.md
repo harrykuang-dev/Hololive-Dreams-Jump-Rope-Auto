@@ -1,6 +1,6 @@
 # 開發說明 — 1.0
 
-一般使用方式見 [README](../README.md)。
+一般使用方式見 [README](../README.zh-TW.md)。
 
 歷史版本變化見 [版本迭代記錄](VERSION_HISTORY.md)。該文件只記錄歷史，不作為執行入口。
 

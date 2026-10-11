@@ -1,98 +1,96 @@
 # Hololive Dreams Auto Jump Rope — 1.0
 
-[繁體中文](README.md) · [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
-Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識繩子位置，以一般滑鼠輸入控制起跳，並在結算後接續下一局。
+A jump-rope program for the Windows version of *hololive Dreams*. It tracks the rope from the game screen, jumps through ordinary mouse input, and starts another round after the result screen.
 
-## 下載
+## Download
 
-前往 [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.0)，下載附件中的 `HololiveDreamsJumpRopeAuto-1.0.exe`。
+Open [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.0) and download `HololiveDreamsJumpRopeAuto-1.0.exe`.
 
-只需執行這一個 EXE，無需安裝 Python。Release 附有 SHA-256 校驗檔；原始碼 ZIP 需自行建置。
+Run the single EXE; Python is not required. A SHA-256 checksum is included. Source ZIPs require building the application yourself.
 
-## 功能
+## Features
 
-- 追蹤繩子運動，辨識起跳時機並自動跳繩。
-- 辨識開始與結算選單，確認上一局結束後接續游玩。
-- 支援六種介面語言：繁體中文、简体中文、English、日本語、한국어、Indonesian。選擇語言會切換程式介面，不會修改遊戲設定。
-- 可設定目標局數，達到目標後停止；每次開始都重新計數。
-- 開始快捷鍵預設 F8，停止快捷鍵預設 F9。點擊設定框，再按下新按鍵或組合鍵即可自訂，兩者不能相同。
-- 提供執行記錄，以及可選的本機開發者診斷模式。
+- Tracks rope movement and automatically times jumps.
+- Recognizes start and result menus and continues after a completed round.
+- Six interface languages: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, and Indonesian. Changing the program language does not change the game settings.
+- Configurable round target; stops when reached and resets the count on each start.
+- Default shortcuts: F8 to start, F9 to stop. Click a shortcut field and press a key or key combination to change it. Start and stop shortcuts must differ.
+- Activity log and optional local developer diagnostics.
 
-## 使用方法
+## Usage
 
-1. 開啟遊戲，進入跳繩開始畫面或結算畫面。
-2. 執行 EXE，在「語言/Language」中選擇程式語言。
-3. 設定目標局數（1–999，預設 1 局）；需要更換快捷鍵時，點擊設定框並按下要使用的按鍵。
-4. 點擊「開始」或按開始快捷鍵。程式會嘗試切回遊戲；運行時請保持遊戲前景、完整位於主螢幕內且無遮擋。建議選用深色、短髮、裝飾少的角色和配飾，例如 **儒烏風亭螺鈿（預設服飾）** 配 像素太陽眼睛（pixel sunglasses）。
-5. 按停止快捷鍵、點擊「停止」，或切換視窗即可停止。再次開始會重新計數。
+1. Open the game at the jump-rope start or result screen.
+2. Run the EXE and choose an program language under Language.
+3. Set a target of 1–999 rounds; the default is 1. Change shortcuts by clicking their fields and pressing the desired keys.
+4. Click Start or press the start shortcut. The program attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Juufuutei Raden (default outfit)** with pixel sunglasses.
+5. Press the stop shortcut, click Stop, or switch windows to stop. Starting again resets the count.
 
-## 使用條件與限制
+## Requirements and limitations
 
-適用於 Windows 10／11 x64 及 Windows 版遊戲。遊戲客戶區需維持 16:9；運行時不要最小化、遮擋或移動視窗。不支援背景游玩，也不會在換日登出後自動重新登入。
+Requires Windows 10/11 x64 and the Windows game client. Keep the game client area at 16:9; do not minimize, cover, or move its window during operation. Background play and automatic login after the daily reset are not supported.
 
-在確保遊戲穩定 60 幀的情況下，盡可能調高畫面設定。
+Increase graphics settings as far as possible while keeping the game at a stable 60 FPS.
 
-介面中的「起跳輸入」是操作次數，實際成績請查看遊戲結算畫面。辨識可能受角色配色、動畫、解析度、電腦效能及遊戲更新影響；遇到異常請停止並提供診斷資料。
+Jump inputs shown in the interface are input counts; read the actual score on the game's result screen. Character colors, animation, resolution, computer performance, and game updates can affect recognition. Stop and provide diagnostics if a problem occurs.
 
 > [!WARNING]
-> **雙顯卡擷取錯誤**
+> **Capture errors on dual-GPU computers**
 >
-> 若開始時出現 `-2005270524 / 0x887A0004`（此系統不支援指定的裝置介面或功能層級），請調整程式的 GPU 偏好：
+> If starting produces `-2005270524 / 0x887A0004` (The specified device interface or feature level is not supported on this system.), adjust the program's GPU preference:
 >
-> ![DXGI 擷取錯誤訊息](docs/dxgi-unsupported-error.png)
+> ![DXGI capture error message](docs/dxgi-unsupported-error.png)
 >
-> 1. 在 Windows「設定 → 系統 → 顯示器 → 進階型顯示器」選擇遊戲使用的主螢幕，查看螢幕所連接的顯卡名稱。
-> 2. 返回「顯示器 → 圖形」（Windows 10 為「圖形設定」），新增桌面應用程式，瀏覽並加入實際執行的 `HololiveDreamsJumpRopeAuto-1.0.exe`。
-> 3. 開啟該程式的「選項」，在「圖形喜好設定」中選擇上述顯卡並按「儲存」。「省電」通常對應集顯，「高效能」通常對應獨顯；以顯示的顯卡名稱為準。
-> 4. 完全關閉程式後重新開啟，再按「開始」測試。
+> 1. Open Windows Settings → System → Display → Advanced display, select the primary monitor used for the game, and note the name of the GPU connected to that monitor.
+> 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.0.exe` you run.
+> 3. Select Options, choose the GPU identified above under Graphics preference, and select Save. “Power saving” usually refers to the integrated GPU and “High performance” to the discrete GPU; check the GPU names shown.
+> 4. Fully close and reopen the program, then click Start to test.
 >
-> 此設定適用於程式 EXE。內建與外接螢幕、獨顯直連及混合模式可能使用不同的輸出顯卡，應依目前螢幕的連接資訊選擇。若仍失敗，請開啟開發者模式重現一次，並提供該次執行資料夾中的 `session.log`、顯卡型號及螢幕連接資訊。
+> Apply this setting to the program EXE. Internal and external displays, discrete-only mode, and hybrid mode can use different display GPUs; choose based on the current display connection. If it still fails, enable Developer mode, reproduce once, and provide `session.log` from that run's folder, your GPU models, and display connection details.
 
-## 技術實現
+## Technical implementation
 
-### 畫面擷取與處理
+### Capture and image processing
 
-[擷取模組](vision.py)透過 DXGI／DXcam 取得遊戲客戶區的新畫面，每次擷取前後檢查前景、位置、尺寸及遮擋。控制迴圈目標為 60 FPS，實際速度取決於遊戲新畫面、識別耗時與系統調度。沒有新畫面時不沿用舊畫面起跳；等待空檔達 100ms 後恢復會丟棄跨空檔幀並重建識別器，最多等待 500ms，仍無新畫面則停止。
+The [capture module](vision.py) uses DXGI/DXcam to acquire new frames from the game client area, checking focus, position, size, and occlusion before and after capture. The control loop targets 60 FPS; its actual rate depends on new game frames, recognition cost, and system scheduling. Missing frames never authorize jumping from old pixels. After a capture gap of at least 100ms, the recovery frame is discarded and the detector is reset. If no new frame arrives within 500ms, operation stops.
 
-[區域處理](priority.py)以 960×540 為識別基準，先裁出採樣範圍再按相同比例縮放。裁切邊界按輸入與輸出解析度的整數比例對齊，維持原有縮放採樣位置，同時減少不需要的像素運算。
+[Region processing](priority.py) uses a 960×540 recognition reference. It crops the sampling area before resizing at the original scale. Crop boundaries align with the integer ratio between input and output resolutions to preserve sample positions while reducing unnecessary pixel processing.
 
-### 繩線識別與幾何擬合
+### Rope recognition and curve fitting
 
-[追蹤器](candidate_tracker.py)在五個橫向區段中取共 100 個採樣列，利用 HSV 篩選藍紫、金黃、粉色及亮白候選，再結合幀間移動和細線的明暗特徵排除背景。從不同區段選取點組，求解多條二次曲線，依沿線支持度及跨區段分布評分，選出符合當前畫面的繩子弧線。高可信觀察也會更新繩子配色，協助後續追蹤。
+The [tracker](candidate_tracker.py) samples 100 columns across five horizontal bands. HSV masks select blue/purple, gold, pink, and bright white candidates; frame differences and thin-line contrast filter background pixels. Point groups from different bands produce multiple quadratic curves, scored by support along the curve and across bands. Confident observations also update a rope color reference for subsequent tracking.
 
-弧線會換算成角色位置上的相對高度，並記錄可見支持比例、主要顏色和移動方向。角色或道具遮擋中央時，可見的兩側片段仍能約束擬合；若證據不足，程式保留必要狀態等待重新觀察，不依照固定週期盲跳。
+The selected curve yields rope height relative to the player, visible support, dominant color, and motion direction. Visible side fragments can constrain the fit when the center is obscured by a character or prop. Insufficient evidence retains necessary state for reacquisition rather than triggering jumps on a fixed schedule.
 
-### 起跳判斷與遮擋恢復
+### Jump decisions and occlusion recovery
 
-[識別器](jump_detector.py)結合弧線接近、跨線、退離及低位繩轉折等畫面狀態，判斷一次過繩是否已觸發。遮擋後重新允許起跳時，會檢查連續可見片段、兩側支持及高度變化，避免同一次過繩重複觸發。
+The [detector](jump_detector.py) uses visible approach, crossing, retreat, and low-rope turning states to track whether a pass has already triggered. Rearming after occlusion checks consecutive visible fragments, support on both sides, and height changes to limit repeated triggers for the same pass.
 
-防突變檢查把「上次實際觀察」與「上次接受位置」的時間分開。部分支持的擬合若突然朝角色靠近，不會僅因保留位置的時間變舊而放行；最近三次原始觀察若顯示可信、連貫的接近，則可回到正常判斷。
+The geometry-jump guard separates the last actual observation time from the last accepted-position time. A partially supported fit that suddenly moves toward the player is not accepted just because the stored position is old. Three recent raw observations showing a credible, coherent approach allow normal evaluation to resume.
 
-### 輸入、選單與續局
+### Input, menus, and round continuation
 
-[控制器](jump_rope_bot.py)產生起跳候選後，先再取一張新畫面確認遊戲仍在進行、角色可以操作及起跳按鈕可見，再把相對座標轉為實際螢幕位置，透過 Windows 滑鼠輸入按下 25ms。即使輸入途中中斷，也會釋放滑鼠；實際按住時長會記入診斷資料，可能受系統調度影響。
+After a jump candidate, the [controller](jump_rope_bot.py) captures another new frame to check that gameplay is active, the player is ready, and the jump button is visible. It converts relative coordinates to screen coordinates and holds the left mouse button for a requested 25ms through Windows input. Interrupted input still releases the button. Diagnostics record the actual hold duration, which may vary with scheduling.
 
-選單按鈕依位置、青色膠囊外框、白色邊緣及頁面配色識別，排除內部文字。導航要求多幀確認並限制同頁重試；首次確認遊戲 HUD 後，該局停止選單導航。[會話控制](batch_session.py)只在上一局結束且結算頁穩定確認後開下一局，達到目標局數即停止。程式依據畫面與一般輸入運作，不讀取或修改遊戲程序記憶體、存檔或遊戲檔案。
+Menu recognition uses button position, cyan pill outline, white rim, and page colors, excluding the inner text. Navigation requires several confirming frames and bounds retries on the same page. Once the game HUD is confirmed, menu navigation is disabled for that round. [Session control](batch_session.py) starts another round only after completion and a stable result page, then stops at the target. Operation uses screen pixels and ordinary input without reading or modifying game process memory, saves, or game files.
 
-## 異常回報與開發者模式
+## Bug reports and developer mode
 
-無法續局、起跳異常或其他問題，可在 [GitHub Issues](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/issues) 提交回報。
+Report continuation failures, jump problems, or other issues through [GitHub Issues](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/issues).
 
-勾選「開發者模式」後再重現問題。它會保存診斷截圖、逐幀識別記錄、按鍵時序及耗時；資料只存於本機，不會自動上傳。啟用後會增加效能負擔。
+Enable Developer mode before reproducing the problem. It saves diagnostic screenshots, frame recognition records, input timing, and processing times locally, without automatic uploads. Enabling it increases processing overhead.
 
-點擊右側 `?` 可查看並開啟診斷資料夾：
+Click `?` to view and open the diagnostics folder:
 
 ```text
 %LOCALAPPDATA%\HololiveJumpRopeAuto\sessions\
 ```
 
-每次運行建立以時間命名的資料夾，每局結束後在 `round-局號` 資料夾中產生 `diagnostics.zip`。回報時請提供程式版本、遊戲語言／角色、解析度、Windows 顯示縮放、問題描述，以及出問題那一局的診斷 ZIP。
+Each run creates a timestamped folder. Each completed round produces `diagnostics.zip` in its `round-XX` folder. Include the application version, game language/character, resolution, Windows display scaling, problem description, and the affected round's ZIP in your report.
 
-## 原始碼與授權
+## Source and license
 
-原始碼啟動、單檔建置、測試及診斷格式見 [開發說明](docs/DEVELOPMENT.md)。
+Source startup, building, tests, and diagnostic formats are in the [development guide](docs/DEVELOPMENT.md). Changes reconstructed from this conversation are in the [version history](docs/VERSION_HISTORY.md); historical versions are marked as superseded. Both documents are in Traditional Chinese.
 
-歷史版本變化見 [版本迭代記錄](docs/VERSION_HISTORY.md)，舊版本均標明已迭代。
-
-程式碼使用 [MIT License](LICENSE)。Logo 及遊戲相關權利歸原權利人所有。
+Code is licensed under the [MIT License](LICENSE). Logo and game-related rights belong to their respective owners.

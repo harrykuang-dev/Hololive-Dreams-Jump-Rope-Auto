@@ -1,6 +1,6 @@
 # Hololive Dreams Auto Jump Rope — 1.0
 
-[繁體中文](README.md) · [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
 Windows 版『hololive Dreams』の自動なわとびプログラムです。ゲーム画面から縄の位置を認識し、通常のマウス入力でジャンプを操作します。結果画面の確認後は次のプレイへ進みます。
 

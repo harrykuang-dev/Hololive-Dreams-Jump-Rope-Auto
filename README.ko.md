@@ -1,6 +1,6 @@
 # Hololive Dreams Auto Jump Rope — 1.0
 
-[繁體中文](README.md) · [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
 Windows 버전 《hololive Dreams》의 자동 줄넘기 프로그램입니다. 게임 화면에서 줄의 위치를 인식하고 일반 마우스 입력으로 점프하며, 결과 화면을 확인한 뒤 다음 라운드를 시작합니다.
 

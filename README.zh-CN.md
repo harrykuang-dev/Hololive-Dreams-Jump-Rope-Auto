@@ -1,6 +1,6 @@
 # Hololive Dreams Auto Jump Rope — 1.0
 
-[繁體中文](README.md) · [简体中文](README.zh-CN.md) · [English](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md)
+[English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
 Windows 版《hololive Dreams》的自动跳绳程序。通过游戏画面识别绳子位置，以一般鼠标输入控制起跳，并在结算后接续下一局。
 
