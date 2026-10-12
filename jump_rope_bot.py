@@ -15,7 +15,6 @@ from typing import Callable
 import win32api
 import win32con
 import win32gui
-import win32process
 
 from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen, TemporaryCaptureOverlayError, NoFreshFrameError, RecoveredFrameGap
 from jump_detector import VisualPassDetector
@@ -111,7 +110,7 @@ class JumpRopeBot:
         hwnd = win32gui.FindWindow(self.config.window_class, self.config.window_title)
         if not hwnd or not win32gui.IsWindow(hwnd):
             raise GameNotFoundError(
-                f'找不到遊戲視窗 "{self.config.window_title}"。請先開啟遊戲且不要最小化。'
+                f'找不到遊戲視窗 "{self.config.window_title}"。請先開啟遊戲。'
             )
         return hwnd
 
@@ -122,31 +121,42 @@ class JumpRopeBot:
         except (AttributeError, OSError):
             pass
 
-    def focus_game(self) -> int:
+    def focus_game(self) -> int | None:
         hwnd = self.find_game()
         if win32gui.IsIconic(hwnd):
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            self._sleep(0.15)
+            LOG.info('正在還原遊戲視窗')
+            # Never synchronously message a minimized Unity window or join its
+            # input queue to Tk's queue. The UI must remain free to cancel.
+            ctypes.windll.user32.ShowWindowAsync(ctypes.c_void_p(hwnd), win32con.SW_RESTORE)
         self._allow_foreground_switch()
-        foreground = win32gui.GetForegroundWindow()
-        current_thread = win32api.GetCurrentThreadId()
-        target_thread, _ = win32process.GetWindowThreadProcessId(hwnd)
-        foreground_thread, _ = win32process.GetWindowThreadProcessId(foreground)
-        attached: list[int] = []
-        try:
-            for thread_id in {target_thread, foreground_thread} - {current_thread}:
-                win32process.AttachThreadInput(current_thread, thread_id, True)
-                attached.append(thread_id)
-            win32gui.BringWindowToTop(hwnd)
-            win32gui.SetForegroundWindow(hwnd)
-            win32gui.SetFocus(hwnd)
-        except Exception as error:
-            raise RuntimeError("無法將遊戲切到前景；請手動點一下遊戲視窗後重試。") from error
-        finally:
-            for thread_id in attached:
-                win32process.AttachThreadInput(current_thread, thread_id, False)
-        self._hwnd = hwnd
-        return hwnd
+        deadline = self._clock()+3.0
+        stable_since = None
+        while self._clock() < deadline:
+            if self._stopped():
+                return None
+            if not win32gui.IsWindow(hwnd):
+                raise GameNotFoundError('遊戲視窗已關閉。')
+            if not win32gui.IsIconic(hwnd):
+                if win32gui.GetForegroundWindow() != hwnd:
+                    try:
+                        win32gui.SetForegroundWindow(hwnd)
+                    except Exception:
+                        # Windows may temporarily deny focus during restoration.
+                        # Retry for a bounded interval without blocking the UI.
+                        pass
+                _,_,width,height = win32gui.GetClientRect(hwnd)
+                ready = win32gui.GetForegroundWindow() == hwnd and width > 0 and height > 0
+                if ready:
+                    stable_since = self._clock() if stable_since is None else stable_since
+                    if self._clock()-stable_since >= .15:
+                        self._hwnd = hwnd
+                        return hwnd
+                else:
+                    stable_since = None
+            else:
+                stable_since = None
+            self._sleep(.05)
+        raise RuntimeError('無法還原遊戲或切到前景；請手動還原遊戲視窗後重試。')
 
     def tap_jump(self, frame) -> bool:
         """Click the game's own Jump button, which Unity accepts reliably."""
@@ -239,6 +249,8 @@ class JumpRopeBot:
             if self._stopped():
                 return
             self.focus_game()
+            if self._stopped():
+                return
             detector = VisualPassDetector()
             gate = self.gate_type()
             startup_screen = StartupScreen() if self.config.auto_start and not self.config.observe_only else None
@@ -364,7 +376,7 @@ class JumpRopeBot:
                 if gate.finished:
                     if navigator is not None:
                         navigator.seal()
-                    LOG.info("本局結束或畫面無法確認，已停止；不會點擊下一步")
+                    LOG.info("本局結束或畫面無法確認，已停止")
                     self.stop_reason = "round_finished"
                     record(frame, now, hud=False, player_ready=False)
                     postroll_until = self._clock() + self.config.result_postroll
@@ -450,7 +462,7 @@ class JumpRopeBot:
                        input_elapsed=(self.last_tap_at-started)
                        if clicked and self.last_tap_at is not None else None)
                 if now-last_report >= 5:
-                    LOG.info("候選=%d，已送出輸入=%d；此數字不是遊戲分數",
+                    LOG.info("起跳候選=%d，輸入次數=%d",
                              self.candidate_count, self.tap_count)
                     last_report = now
                 # Budget the entire iteration, not an extra sleep after work.
@@ -576,7 +588,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     bot = JumpRopeBot(BotConfig(observe_only=args.observe, record_path=args.record))
     try:
-        print("只觀察，不輸入" if args.observe else "開始單局視覺跳繩（尚未驗證100下）")
+        print("只觀察，不輸入" if args.observe else "開始自動跳繩")
         print("按 Ctrl+C 停止。")
         bot.run(args.duration)
     except KeyboardInterrupt:

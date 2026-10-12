@@ -20,7 +20,7 @@ def verify(executable: Path, root: Path) -> dict:
     for name in ('app_locale', 'app_settings', 'batch_session', 'jump_rope_bot',
                  'jump_detector', 'rope_geometry', 'candidate_tracker', 'candidates',
                  'priority', 'repair_detector', 'shared_gate', 'global_hotkey',
-                 'diagnostics', 'vision', 'session_flow', 'main_ui'):
+                 'diagnostics', 'vision', 'session_flow', 'fluent_theme', 'main_ui'):
         path = root / (name.replace('.', '/')+'.py')
         frozen = marshal.loads(archive.extract(name)) if name == 'main_ui' else modules.extract(name)
         expected = compile(path.read_text(encoding='utf-8'), frozen.co_filename, 'exec', dont_inherit=True)

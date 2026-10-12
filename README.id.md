@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.0
+# Hololive Dreams Auto Jump Rope — 1.1.0
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@ Program lompat tali untuk *hololive Dreams* versi Windows. Program mengenali pos
 
 ## Unduh
 
-Buka [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.0) dan unduh `HololiveDreamsJumpRopeAuto-1.0.exe`.
+Buka [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.1.0) dan unduh `HololiveDreamsJumpRopeAuto-1.1.0.exe`.
 
 Cukup jalankan satu EXE ini; tidak perlu memasang Python. Tersedia berkas checksum SHA-256. ZIP kode sumber perlu dibangun sendiri.
 
@@ -43,7 +43,7 @@ Input lompat pada antarmuka adalah jumlah input; lihat skor sebenarnya pada laya
 > ![Pesan kesalahan tangkapan DXGI](docs/dxgi-unsupported-error.png)
 >
 > 1. Buka Pengaturan Windows → Sistem → Tampilan → Tampilan tingkat lanjut, pilih monitor utama yang digunakan untuk game, lalu periksa nama GPU yang terhubung ke monitor tersebut.
-> 2. Kembali ke Tampilan → Grafik (“Pengaturan grafis” pada Windows 10), tambahkan aplikasi desktop, lalu pilih `HololiveDreamsJumpRopeAuto-1.0.exe` yang benar-benar dijalankan.
+> 2. Kembali ke Tampilan → Grafik (“Pengaturan grafis” pada Windows 10), tambahkan aplikasi desktop, lalu pilih `HololiveDreamsJumpRopeAuto-1.1.0.exe` yang benar-benar dijalankan.
 > 3. Pilih Opsi aplikasi, pilih GPU di atas pada preferensi Grafis, lalu pilih Simpan. “Hemat daya” biasanya merujuk ke GPU terintegrasi dan “Performa tinggi” ke GPU diskret; periksa nama GPU yang ditampilkan.
 > 4. Tutup program sepenuhnya, buka kembali, lalu klik Mulai untuk menguji.
 >

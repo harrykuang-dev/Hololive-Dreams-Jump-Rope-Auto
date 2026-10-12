@@ -1,4 +1,4 @@
-# 開發說明 — 1.0
+# 開發說明 — 1.1.0
 
 一般使用方式見 [README](../README.zh-TW.md)。
 
@@ -14,7 +14,7 @@ python main_ui.py
 python -m pytest -q
 python -m pytest -q -m gui
 python tools/build_release.py
-python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.0.exe --output build-verification.json
+python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.1.0.exe --output build-verification.json
 ```
 
 GUI 測試使用模擬會話，不操作遊戲，但會建立測試視窗。請在沒有實戰測試運行時執行。
@@ -23,6 +23,7 @@ GUI 測試使用模擬會話，不操作遊戲，但會建立測試視窗。請�
 
 ## 程式結構
 
+- `fluent_theme.py`：共用字級、圓角控制項及縮放樣式。
 - `main_ui.py`：六語言介面、快捷鍵設定、執行記錄及開發者說明。
 - `batch_session.py`：局數限制、會話計數、停止控制及診斷打包。
 - `vision.py`：DXGI 擷取、遊戲畫面判斷與選單按鈕識別。

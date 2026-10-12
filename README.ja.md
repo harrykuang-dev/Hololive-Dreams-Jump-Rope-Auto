@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.0
+# Hololive Dreams Auto Jump Rope — 1.1.0
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@ Windows 版『hololive Dreams』の自動なわとびプログラムです。ゲ
 
 ## ダウンロード
 
-[GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.0) から `HololiveDreamsJumpRopeAuto-1.0.exe` をダウンロードしてください。
+[GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.1.0) から `HololiveDreamsJumpRopeAuto-1.1.0.exe` をダウンロードしてください。
 
 この EXE 一つで実行でき、Python のインストールは不要です。SHA-256 チェックサムも付属します。ソース ZIP を使う場合は自分でビルドしてください。
 
@@ -43,7 +43,7 @@ Windows 10／11 x64 と Windows 版ゲームが必要です。ゲームのクラ
 > ![DXGI の画面取得エラー](docs/dxgi-unsupported-error.png)
 >
 > 1. Windows の「設定 → システム → ディスプレイ → ディスプレイの詳細設定」でゲームに使用するメインモニターを選び、表示される接続先 GPU の名前を確認します。
-> 2. 「ディスプレイ → グラフィックス」（Windows 10 では「グラフィックス設定」）に戻り、デスクトップアプリを追加して、実際に使用する `HololiveDreamsJumpRopeAuto-1.0.exe` を選びます。
+> 2. 「ディスプレイ → グラフィックス」（Windows 10 では「グラフィックス設定」）に戻り、デスクトップアプリを追加して、実際に使用する `HololiveDreamsJumpRopeAuto-1.1.0.exe` を選びます。
 > 3. アプリの「オプション」を開き、「グラフィックの環境設定」で上記の GPU を選択して「保存」を押します。「省電力」は通常内蔵 GPU、「高パフォーマンス」は通常独立 GPU です。表示される GPU 名で確認してください。
 > 4. プログラムを完全に終了して再起動し、「開始」で確認します。
 >

@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.0
+# Hololive Dreams Auto Jump Rope — 1.1.0
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@ A jump-rope program for the Windows version of *hololive Dreams*. It tracks the 
 
 ## Download
 
-Open [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.0) and download `HololiveDreamsJumpRopeAuto-1.0.exe`.
+Open [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.1.0) and download `HololiveDreamsJumpRopeAuto-1.1.0.exe`.
 
 Run the single EXE; Python is not required. A SHA-256 checksum is included. Source ZIPs require building the application yourself.
 
@@ -22,7 +22,7 @@ Run the single EXE; Python is not required. A SHA-256 checksum is included. Sour
 ## Usage
 
 1. Open the game at the jump-rope start or result screen.
-2. Run the EXE and choose an program language under Language.
+2. Run the EXE and choose a program language under Language.
 3. Set a target of 1–999 rounds; the default is 1. Change shortcuts by clicking their fields and pressing the desired keys.
 4. Click Start or press the start shortcut. The program attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Juufuutei Raden (default outfit)** with pixel sunglasses.
 5. Press the stop shortcut, click Stop, or switch windows to stop. Starting again resets the count.
@@ -43,7 +43,7 @@ Jump inputs shown in the interface are input counts; read the actual score on th
 > ![DXGI capture error message](docs/dxgi-unsupported-error.png)
 >
 > 1. Open Windows Settings → System → Display → Advanced display, select the primary monitor used for the game, and note the name of the GPU connected to that monitor.
-> 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.0.exe` you run.
+> 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.1.0.exe` you run.
 > 3. Select Options, choose the GPU identified above under Graphics preference, and select Save. “Power saving” usually refers to the integrated GPU and “High performance” to the discrete GPU; check the GPU names shown.
 > 4. Fully close and reopen the program, then click Start to test.
 >
@@ -91,6 +91,6 @@ Each run creates a timestamped folder. Each completed round produces `diagnostic
 
 ## Source and license
 
-Source startup, building, tests, and diagnostic formats are in the [development guide](docs/DEVELOPMENT.md). Changes reconstructed from this conversation are in the [version history](docs/VERSION_HISTORY.md); historical versions are marked as superseded. Both documents are in Traditional Chinese.
+Source startup, building, tests, and diagnostic formats are in the [development guide](docs/DEVELOPMENT.md). Previous changes are documented in the [version history](docs/VERSION_HISTORY.md); historical versions are marked as superseded. Both documents are in Traditional Chinese.
 
 Code is licensed under the [MIT License](LICENSE). Logo and game-related rights belong to their respective owners.

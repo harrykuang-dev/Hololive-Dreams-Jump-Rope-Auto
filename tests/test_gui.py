@@ -1,5 +1,6 @@
 """Opt-in GUI contracts with fake sessions; never controls the game."""
 from types import SimpleNamespace
+import threading
 from unittest.mock import Mock, patch
 import tkinter as tk
 import pytest
@@ -54,7 +55,8 @@ def test_translated_controls_fit_at_supported_dpis(dpi, root):
             app.apply_language()
             root.update()
             assert app.start_button.winfo_height() == app.stop_button.winfo_height()
-            assert app.start_button.winfo_width() == app.stop_button.winfo_width()
+            # An odd available pixel count splits equally with a 1px remainder.
+            assert abs(app.start_button.winfo_width() - app.stop_button.winfo_width()) <= 1
             assert app.log.winfo_height() >= 40
             assert app.log.winfo_rooty()+app.log.winfo_height() <= root.winfo_rooty()+root.winfo_height()
             assert app.language_choice.winfo_rootx()+app.language_choice.winfo_width() <= root.winfo_rootx()+root.winfo_width()
@@ -174,3 +176,103 @@ def test_both_shortcut_fields_ignore_num_lock_and_preserve_real_alt(root, target
         assert not app._capturing
     finally:
         dispose(root, app)
+
+
+@pytest.mark.parametrize('dpi',[96,120,144])
+def test_minimum_window_keeps_translated_log_visible(dpi,root):
+    with patch('main_ui.window_dpi',return_value=dpi), patch('main_ui.window_work_area',return_value=(3840,2160)):
+        app = main_ui.JumpRopeApp(root)
+    try:
+        root.geometry(f'{app.px(360)}x{app.px(680)}')
+        for language in LANGUAGES:
+            app.language.set(language)
+            app.apply_language()
+            root.update()
+            assert app.log.winfo_height() >= app.px(30)
+            assert app.logs.winfo_rooty()+app.logs.winfo_height() <= root.winfo_rooty()+root.winfo_height()
+            assert app.version_label.winfo_rooty()+app.version_label.winfo_height() <= root.winfo_rooty()+root.winfo_height()
+            assert app.shortcut_entry.cget('readonlybackground') == '#FFFFFF'
+    finally:
+        dispose(root,app)
+
+
+def test_resize_reuses_theme_images(root):
+    app = main_ui.JumpRopeApp(root)
+    try:
+        images = tuple(app.theme.images)
+        for width,height in ((500,860),(640,920),(440,740),(560,900)):
+            root.geometry(f'{app.px(width)}x{app.px(height)}')
+            root.update()
+            assert tuple(app.theme.images) == images
+    finally:
+        dispose(root,app)
+
+
+def test_help_is_centered_on_parent_and_reused(root):
+    app = main_ui.JumpRopeApp(root)
+    try:
+        root.geometry('500x860+450+100')
+        root.update()
+        app.show_help()
+        root.update()
+        dialog = app.help_dialog
+        assert abs((dialog.winfo_rootx()+dialog.winfo_width()/2)
+                   -(root.winfo_rootx()+root.winfo_width()/2)) < app.px(24)
+        assert abs((dialog.winfo_rooty()+dialog.winfo_height()/2)
+                   -(root.winfo_rooty()+root.winfo_height()/2)) < app.px(24)
+        app.show_help()
+        assert app.help_dialog is dialog
+        dialog.destroy()
+    finally:
+        dispose(root,app)
+
+
+def test_version_is_in_footer_and_not_window_title(root):
+    app = main_ui.JumpRopeApp(root)
+    try:
+        assert app.version_label.cget('text') == 'v1.1.0'
+        assert '1.1.0' not in root.title()
+        assert app.status.cget('text') == '等待開始'
+        assert app.counter.cget('text') == '已完成：0 / 1 局'
+        assert not hasattr(app,'round_hint') and not hasattr(app,'log_title')
+    finally:
+        dispose(root,app)
+
+
+def test_startup_failure_releases_controls_for_retry(root):
+    def factory(config,**kwargs):
+        return SimpleNamespace(config=config,completed_rounds=0,inputs=0,directory=None,
+            stop_reason='error',run=Mock(side_effect=RuntimeError('restore timeout')),stop=Mock())
+    app = main_ui.JumpRopeApp(root,session_factory=factory)
+    try:
+        app.start()
+        app.worker.join(1)
+        app.poll()
+        assert app.has_error
+        assert not app.start_button.instate(['disabled'])
+        assert app.stop_button.instate(['disabled'])
+        first = app.session
+        app.start()
+        app.worker.join(1)
+        assert app.session is not first
+    finally:
+        dispose(root,app)
+
+
+def test_stop_button_cancels_startup_wait(root):
+    stopped = threading.Event()
+    def factory(config,**kwargs):
+        return SimpleNamespace(config=config,completed_rounds=0,inputs=0,directory=None,
+            stop_reason='stopped',run=lambda:stopped.wait(1),stop=stopped.set)
+    app = main_ui.JumpRopeApp(root,session_factory=factory)
+    try:
+        app.start()
+        assert not app.stop_button.instate(['disabled'])
+        app.stop_button.invoke()
+        assert stopped.is_set()
+        app.worker.join(1)
+        app.poll()
+        assert not app.start_button.instate(['disabled'])
+    finally:
+        stopped.set()
+        dispose(root,app)

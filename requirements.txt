@@ -2,3 +2,4 @@ pywin32>=312
 numpy>=2.0
 opencv-python>=4.10
 dxcam==0.3.0
+Pillow>=11
