@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.1.0
+# Hololive Dreams Auto Jump Rope — 1.2.0
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,13 +6,14 @@ Windows 版《hololive Dreams》的自动跳绳程序。通过游戏画面识别
 
 ## 下载
 
-前往 [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.1.0)，下载附件中的 `HololiveDreamsJumpRopeAuto-1.1.0.exe`。
+前往 [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.2.0)，下载附件中的 `HololiveDreamsJumpRopeAuto-1.2.0.exe`。
 
 只需运行这一个 EXE，无需安装 Python。Release 附有 SHA-256 校验文件；源码 ZIP 需要自行构建。
 
 ## 功能
 
 - 追踪绳子运动，识别起跳时机并自动跳绳。
+- 起跳时机滑块可连续调整高弧绳线的画面触发位置；中间是默认值，向左提前、向右推迟。五个刻度仅供参考，不会吸附或限制滑动位置。这调整的是识别阈值，并非固定延后若干毫秒。
 - 识别开始与结算菜单，确认上一局结束后接续游玩。
 - 支持六种界面语言：繁體中文、简体中文、English、日本語、한국어、Indonesian。选择语言会切换程序界面，不会修改游戏设置。
 - 可设置目标局数，达到目标后停止；每次开始都重新计数。
@@ -43,7 +44,7 @@ Windows 版《hololive Dreams》的自动跳绳程序。通过游戏画面识别
 > ![DXGI 捕获错误提示](docs/dxgi-unsupported-error.png)
 >
 > 1. 在 Windows“设置 → 系统 → 显示 → 高级显示”中选择游戏使用的主屏幕，查看屏幕所连接的显卡名称。
-> 2. 返回“显示 → 图形”（Windows 10 为“图形设置”），添加桌面应用，浏览并加入实际运行的 `HololiveDreamsJumpRopeAuto-1.1.0.exe`。
+> 2. 返回“显示 → 图形”（Windows 10 为“图形设置”），添加桌面应用，浏览并加入实际运行的 `HololiveDreamsJumpRopeAuto-1.2.0.exe`。
 > 3. 打开该程序的“选项”，在“图形首选项”中选择上述显卡并点击“保存”。“节能”通常对应集显，“高性能”通常对应独显；以显示的显卡名称为准。
 > 4. 完全关闭程序后重新打开，再点击“开始”测试。
 >

@@ -18,6 +18,7 @@ import win32gui
 
 from vision import GameCapture, RoundGate, StartupNavigator, StartupScreen, TemporaryCaptureOverlayError, NoFreshFrameError, RecoveredFrameGap
 from jump_detector import VisualPassDetector
+from timing_control import DEFAULT_TIMING_POSITION, detector_for_timing, validate_timing_position
 
 LOG = logging.getLogger("jump-rope-auto")
 
@@ -43,8 +44,10 @@ class BotConfig:
     shared_normalization: bool = False
     diagnostics_enabled: bool = True
     defer_record_resize: bool = False
+    timing_position: float = DEFAULT_TIMING_POSITION
 
     def validate(self) -> None:
+        validate_timing_position(self.timing_position)
         if not 0.001 <= self.key_down_time <= 0.05:
             raise ValueError("key_down_time must be between 0.001 and 0.05 seconds")
         if self.record_path is not None and self.record_path.suffix.lower() != ".mp4":
@@ -251,7 +254,8 @@ class JumpRopeBot:
             self.focus_game()
             if self._stopped():
                 return
-            detector = VisualPassDetector()
+            detector_type = detector_for_timing(self.config.timing_position)
+            detector = detector_type()
             gate = self.gate_type()
             startup_screen = StartupScreen() if self.config.auto_start and not self.config.observe_only else None
             navigator = StartupNavigator(startup_screen) if startup_screen is not None else None
@@ -277,7 +281,7 @@ class JumpRopeBot:
                 except RecoveredFrameGap:
                     # No cached pixels or pre-gap candidate can survive recovery.
                     # Original input cooldown, configured stop, focus and visibility guards remain.
-                    detector = VisualPassDetector()
+                    detector = detector_type()
                     LOG.warning('DXGI 短暫空檔已恢復，重建識別狀態；本次不輸入')
                     continue
                 except TemporaryCaptureOverlayError:
@@ -441,7 +445,7 @@ class JumpRopeBot:
                         except RecoveredFrameGap:
                             record(frame, now, hud=allowed, player_ready=ready,
                                    event=candidate, sent=False)
-                            detector = VisualPassDetector()
+                            detector = detector_type()
                             LOG.warning('按鍵前擷取有空檔；取消候選並重建識別狀態')
                             continue
                         timing['fresh_capture_ms'] = round((self._clock()-fresh_started)*1000, 3)

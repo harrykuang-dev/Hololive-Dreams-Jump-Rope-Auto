@@ -32,14 +32,15 @@ def test_session_bound_and_final_round_never_navigates(mutex):
         return SimpleNamespace(run=lambda: None, tap_count=10,
                                stop_reason='round_finished', round_started_at=1, _hwnd=999)
 
-    session = BatchSession(SessionConfig(rounds=7), bot_factory=factory,
+    session = BatchSession(SessionConfig(rounds=7,timing_position=.83), bot_factory=factory,
         result_wait=lambda hwnd, **kw: checked.append(hwnd) or True, get_key_state=lambda _: 0)
     session.run()
     assert len(seen) == session.completed_rounds == 7
     assert checked == [999]*6
     assert session.inputs == 70
     assert mutex == [123]
-    assert all(c.record_path is None and c.capture_backend == 'dxgi' for c in seen)
+    assert all(c.record_path is None and c.capture_backend == 'dxgi'
+               and c.timing_position == .83 for c in seen)
 
 
 def test_stop_between_rounds_cannot_start_another_bot(mutex):

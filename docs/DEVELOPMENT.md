@@ -1,4 +1,4 @@
-# 開發說明 — 1.1.0
+# 開發說明 — 1.2.0
 
 一般使用方式見 [README](../README.zh-TW.md)。
 
@@ -14,7 +14,7 @@ python main_ui.py
 python -m pytest -q
 python -m pytest -q -m gui
 python tools/build_release.py
-python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.1.0.exe --output build-verification.json
+python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.2.0.exe --output build-verification.json
 ```
 
 GUI 測試使用模擬會話，不操作遊戲，但會建立測試視窗。請在沒有實戰測試運行時執行。
@@ -28,6 +28,7 @@ GUI 測試使用模擬會話，不操作遊戲，但會建立測試視窗。請�
 - `batch_session.py`：局數限制、會話計數、停止控制及診斷打包。
 - `vision.py`：DXGI 擷取、遊戲畫面判斷與選單按鈕識別。
 - `jump_detector.py`：正式使用的視覺識別器入口。
+- `timing_control.py`：連續高弧起跳時機門檻與辨識器選擇。
 - `rope_geometry.py`、`candidate_tracker.py`、`candidates.py`、`priority.py`、`repair_detector.py`：繩線幾何擬合、運動判斷及遮擋處理。
 - `jump_rope_bot.py`：開局導航、局內控制、25ms 滑鼠输入及結束處理。
 - `diagnostics.py`：逐幀記錄、診斷截圖與 Issue 附件。

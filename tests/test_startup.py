@@ -138,7 +138,7 @@ def test_startup_navigation_never_reopens_after_monitored_round(monkeypatch, tmp
                       sleeper=lambda seconds: now.__setitem__(0, now[0] + seconds))
     monkeypatch.setattr(bot, "focus_game", lambda: setattr(bot, "_hwnd", 123) or 123)
     monkeypatch.setattr(controller, "GameCapture", Capture)
-    monkeypatch.setattr(controller, "VisualPassDetector", Detector)
+    monkeypatch.setattr(controller, "detector_for_timing", lambda _step: Detector)
     monkeypatch.setattr(controller.win32gui, "GetForegroundWindow", lambda: 123)
     monkeypatch.setattr(controller.win32gui, "GetClientRect", lambda _: (0, 0, 960, 540))
     monkeypatch.setattr(controller.win32gui, "ClientToScreen", lambda _, point: point)

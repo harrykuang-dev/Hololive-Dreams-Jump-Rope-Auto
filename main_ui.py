@@ -11,11 +11,12 @@ import tkinter as tk
 from tkinter import font, messagebox, ttk
 import win32api
 from PIL import Image, ImageTk
-from fluent_theme import FluentTheme, FluentEntry, BG, TEXT, MUTED
+from fluent_theme import FluentTheme, FluentEntry, FluentTimingSlider, BG, TEXT, MUTED
 from app_locale import LANGUAGES, text
 from app_settings import captured_hotkey, parse_stop_hotkey
 from global_hotkey import GlobalHotkey
 from batch_session import APP_VERSION, BatchSession, SessionConfig, diagnostic_base
+from timing_control import DEFAULT_TIMING_POSITION
 
 PROJECT_URL = 'https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto'
 
@@ -78,6 +79,7 @@ class JumpRopeApp:
         self.start_key = tk.StringVar(root, value='F8')
         self.start_shortcut_display = tk.StringVar(root, value='F8')
         self.diagnostics = tk.BooleanVar(root, value=False)
+        self.timing = tk.DoubleVar(root, value=DEFAULT_TIMING_POSITION)
         self._build()
         self.apply_language()
         self.hotkey = GlobalHotkey(lambda:self.messages.put(('start_hotkey', self._hotkey_generation)),
@@ -138,7 +140,8 @@ class JumpRopeApp:
         form.grid(row=4,column=0,sticky='ew',pady=(0,self.px(12)))
         form.columnconfigure(1,weight=1)
         self.form_labels = []
-        for row,name in ((0,'language_label'),(1,'rounds_label'),(3,'start_shortcut_label'),(4,'shortcut_label')):
+        for row,name in ((0,'language_label'),(1,'rounds_label'),(2,'timing_label'),
+                         (3,'start_shortcut_label'),(4,'shortcut_label')):
             widget = ttk.Label(form,style='Card.TLabel')
             widget.grid(row=row,column=0,sticky='w',padx=(0,self.px(12)),pady=self.px(6))
             setattr(self,name,widget)
@@ -164,6 +167,18 @@ class JumpRopeApp:
                 style='DisabledField.TFrame' if field.instate(['disabled']) else 'Field.TFrame'),add='+')
             return field
         self.target_entry = entry('target',self.target,1)
+        timing_frame = ttk.Frame(form,style='Timing.TFrame')
+        timing_frame.grid(row=2,column=1,sticky='ew',pady=self.px(2))
+        timing_frame.columnconfigure((0,1,2),weight=1)
+        self.timing_choice = FluentTimingSlider(timing_frame,variable=self.timing,
+                                                px=self.px,on_change=self._timing_changed)
+        self.timing_choice.grid(row=0,column=0,columnspan=3,sticky='ew')
+        self.timing_early = ttk.Label(timing_frame,style='CardMuted.TLabel')
+        self.timing_early.grid(row=1,column=0,sticky='w')
+        self.timing_value = ttk.Label(timing_frame,style='Card.TLabel')
+        self.timing_value.grid(row=1,column=1)
+        self.timing_late = ttk.Label(timing_frame,style='CardMuted.TLabel')
+        self.timing_late.grid(row=1,column=2,sticky='e')
         self.start_shortcut_entry = entry('start',self.start_shortcut_display,3,True)
         self.start_shortcut_entry.bind('<Button-1>',self.begin_start_capture)
         self.start_shortcut_entry.bind('<FocusOut>',self.end_capture)
@@ -246,12 +261,15 @@ class JumpRopeApp:
         self.root.title(f'Hololive Dreams — {self.tr("title")}')
         for widget,key in ((self.title_label,'title'),(self.instructions,'instructions'),
                 (self.language_label,'language'),(self.rounds_label,'rounds'),
+                (self.timing_label,'timing'),(self.timing_early,'timing_early'),
+                (self.timing_late,'timing_late'),
                 (self.shortcut_label,'shortcut'),(self.start_shortcut_label,'start_shortcut'),(self.start_button,'start'),
                 (self.stop_button,'stop'),(self.diagnostics_check,'diagnostics')):
             value = self.tr(key)
             if key in ('start','stop'):
                 value = value.removeprefix('▶').removeprefix('■').lstrip()
             widget.configure(text=value)
+        self._timing_changed()
         if not self.worker or not self.worker.is_alive():
             self.status.configure(text=self.tr('ready'),foreground=self.STATUS_COLOR)
         self.refresh_counts()
@@ -264,6 +282,14 @@ class JumpRopeApp:
         inputs = self.session.inputs if self.session else 0
         self.counter.configure(text=self.tr('counter',done=done,target=target))
         self.inputs_label.configure(text=self.tr('inputs',count=inputs))
+
+    def _timing_changed(self, _value=None):
+        position = max(0.,min(1.,self.timing.get()))
+        if hasattr(self,'timing_value'):
+            amount = f'{abs(position-.5)*4:.2f}'
+            self.timing_value.configure(text=self.tr('timing_default') if position == .5
+                else self.tr('timing_early_n',count=amount) if position < .5
+                else self.tr('timing_late_n',count=amount))
 
     def begin_capture(self,_event=None):
         if not self.shortcut_entry.instate(['disabled']):
@@ -317,6 +343,7 @@ class JumpRopeApp:
         self.start_button.configure(state='disabled' if running else 'normal')
         self.stop_button.configure(state='normal' if running else 'disabled')
         self.language_choice.configure(state='disabled' if running else 'readonly')
+        self.timing_choice.set_enabled(not running)
         self.shortcut_entry.configure(state='disabled' if running else 'readonly')
         self.start_shortcut_entry.configure(state='disabled' if running else 'readonly')
         self.hotkey.configure(value=self.start_key.get(),enabled=not running and not self._closing)
@@ -340,7 +367,8 @@ class JumpRopeApp:
             return
         try:
             config = SessionConfig(rounds=int(self.target.get()),stop_hotkey=self.stop_key.get(),
-                                   diagnostics=self.diagnostics.get())
+                                   diagnostics=self.diagnostics.get(),
+                                   timing_position=self.timing.get())
             config.validate()
         except ValueError:
             messagebox.showerror(self.tr('error'),self.tr('invalid'),parent=self.root)

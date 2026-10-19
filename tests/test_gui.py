@@ -230,11 +230,56 @@ def test_help_is_centered_on_parent_and_reused(root):
 def test_version_is_in_footer_and_not_window_title(root):
     app = main_ui.JumpRopeApp(root)
     try:
-        assert app.version_label.cget('text') == 'v1.1.0'
-        assert '1.1.0' not in root.title()
+        assert app.version_label.cget('text') == 'v1.2.0'
+        assert '1.2.0' not in root.title()
         assert app.status.cget('text') == '等待開始'
         assert app.counter.cget('text') == '已完成：0 / 1 局'
         assert not hasattr(app,'round_hint') and not hasattr(app,'log_title')
+    finally:
+        dispose(root,app)
+
+
+def test_timing_slider_defaults_to_centre_and_freezes_for_a_session(root):
+    factory = Mock(side_effect=lambda config,**kw:SimpleNamespace(config=config,completed_rounds=0,
+        inputs=0,stop_reason='round_finished',directory=None,run=Mock(),stop=Mock()))
+    app = main_ui.JumpRopeApp(root,session_factory=factory)
+    try:
+        assert app.timing.get() == .5
+        assert app.timing_value.cget('text') == '預設'
+        root.update()
+        assert len(app.timing_choice.find_withtag('timing_tick')) == 5
+        assert len(app.timing_choice.find_withtag('timing_mark')) == 5
+        app.timing_choice._choose(SimpleNamespace(x=app.timing_choice.winfo_width()-1))
+        assert app.timing.get() == 1
+        app.timing_choice._move(-.01)
+        assert app.timing.get() == .99
+        left,right = app.timing_choice._ends()
+        assert left == app.px(1)
+        assert right == app.timing_choice.winfo_width()-app.px(1)
+        app.timing_choice._choose(SimpleNamespace(x=left+(right-left)*.413))
+        assert app.timing.get() == pytest.approx(.413)
+        app.timing_choice._choose(SimpleNamespace(x=(left+right)/2+app.px(4)))
+        assert app.timing.get() == .5
+        app.timing_choice._choose(SimpleNamespace(x=left+(right-left)*.503),snap_centre=False)
+        assert app.timing.get() == pytest.approx(.503)
+        app.timing_choice._choose(SimpleNamespace(x=(left+right)/2,y=app.px(25)))
+        assert app.timing.get() == .5
+        assert app.timing_choice.winfo_rootx() == app.field_frames['target'].winfo_rootx()
+        assert app.timing_choice.winfo_width() == app.field_frames['target'].winfo_width()
+        app.timing.set(.25)
+        assert app.timing_value.cget('text') == '提早 1.00'
+        app.start()
+        app.worker.join(1)
+        assert factory.call_args.args[0].timing_position == .25
+        assert app.timing_choice.instate(['disabled'])
+        app.timing_choice._choose(SimpleNamespace(x=app.timing_choice.winfo_width()-1))
+        assert app.timing.get() == .25
+        app.poll()
+        assert not app.timing_choice.instate(['disabled'])
+        app.timing.set(.83)
+        app.start()
+        app.worker.join(1)
+        assert factory.call_args.args[0].timing_position == .83
     finally:
         dispose(root,app)
 

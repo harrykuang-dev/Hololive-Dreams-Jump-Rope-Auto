@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.1.0
+# Hololive Dreams Auto Jump Rope — 1.2.0
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,13 +6,14 @@ A jump-rope program for the Windows version of *hololive Dreams*. It tracks the 
 
 ## Download
 
-Open [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.1.0) and download `HololiveDreamsJumpRopeAuto-1.1.0.exe`.
+Open [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.2.0) and download `HololiveDreamsJumpRopeAuto-1.2.0.exe`.
 
 Run the single EXE; Python is not required. A SHA-256 checksum is included. Source ZIPs require building the application yourself.
 
 ## Features
 
 - Tracks rope movement and automatically times jumps.
+- A continuous jump-timing slider adjusts the visible overhead-rope crossing. The center is the default; move left to jump earlier or right to jump later. The five marks are reference points; the slider does not snap to them. This changes a visual threshold, not a fixed millisecond delay.
 - Recognizes start and result menus and continues after a completed round.
 - Six interface languages: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, and Indonesian. Changing the program language does not change the game settings.
 - Configurable round target; stops when reached and resets the count on each start.
@@ -43,7 +44,7 @@ Jump inputs shown in the interface are input counts; read the actual score on th
 > ![DXGI capture error message](docs/dxgi-unsupported-error.png)
 >
 > 1. Open Windows Settings → System → Display → Advanced display, select the primary monitor used for the game, and note the name of the GPU connected to that monitor.
-> 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.1.0.exe` you run.
+> 2. Return to Display → Graphics (“Graphics settings” on Windows 10), add a desktop app, and browse to the actual `HololiveDreamsJumpRopeAuto-1.2.0.exe` you run.
 > 3. Select Options, choose the GPU identified above under Graphics preference, and select Save. “Power saving” usually refers to the integrated GPU and “High performance” to the discrete GPU; check the GPU names shown.
 > 4. Fully close and reopen the program, then click Start to test.
 >
@@ -66,6 +67,8 @@ The selected curve yields rope height relative to the player, visible support, d
 ### Jump decisions and occlusion recovery
 
 The [detector](jump_detector.py) uses visible approach, crossing, retreat, and low-rope turning states to track whether a pass has already triggered. Rearming after occlusion checks consecutive visible fragments, support on both sides, and height changes to limit repeated triggers for the same pass.
+
+The center timing setting uses an earlier overhead crossing with five-band support and descending-motion checks. The slider changes only this overhead threshold; the rightmost position uses the original crossing. Low-rope and occlusion rules, plus the 25ms press duration, remain unchanged.
 
 The geometry-jump guard separates the last actual observation time from the last accepted-position time. A partially supported fit that suddenly moves toward the player is not accepted just because the stored position is old. Three recent raw observations showing a credible, coherent approach allow normal evaluation to resume.
 

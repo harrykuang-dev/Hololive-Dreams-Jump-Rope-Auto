@@ -25,6 +25,109 @@ class FluentEntry(tk.Entry):
                    for state in states)
 
 
+class FluentTimingSlider(tk.Canvas):
+    """Continuous timing control with five labelled reference marks."""
+
+    def __init__(self, master, *, variable, px, on_change):
+        self.variable, self.px, self.on_change = variable, px, on_change
+        super().__init__(master, width=px(210), height=px(32), background=SURFACE,
+                         borderwidth=0, highlightthickness=0, takefocus=1,
+                         cursor='hand2')
+        self._thumb_images = {(enabled, focused): self._make_thumb(enabled, focused)
+                              for enabled, focused in ((True, False), (True, True), (False, False))}
+        self.variable.trace_add('write', self._value_changed)
+        self.bind('<Configure>', lambda _event: self.redraw())
+        self.bind('<Button-1>', self._choose)
+        self.bind('<B1-Motion>', lambda event: self._choose(event, snap_centre=False))
+        self.bind('<Left>', lambda _event: self._move(-.01))
+        self.bind('<Right>', lambda _event: self._move(.01))
+        self.bind('<Home>', lambda _event: self._set(0))
+        self.bind('<End>', lambda _event: self._set(1))
+        self.bind('<Double-Button-1>', lambda _event: self._set(.5))
+        self.bind('<FocusIn>', lambda _event: self.redraw())
+        self.bind('<FocusOut>', lambda _event: self.redraw())
+        self.redraw()
+
+    def instate(self, states):
+        current = str(self.cget('state'))
+        return all(current != state[1:] if state.startswith('!') else current == state
+                   for state in states)
+
+    def set_enabled(self, enabled):
+        self.configure(state='normal' if enabled else 'disabled',
+                       cursor='hand2' if enabled else 'arrow')
+        self.redraw()
+
+    def _value_changed(self, *_args):
+        self.redraw()
+        self.on_change()
+
+    def _set(self, value):
+        if not self.instate(['disabled']):
+            self.variable.set(round(max(0., min(1., float(value))), 6))
+        return 'break'
+
+    def _move(self, direction):
+        return self._set(self.variable.get()+direction)
+
+    def _choose(self, event, *, snap_centre=True):
+        if self.instate(['disabled']):
+            return 'break'
+        self.focus_set()
+        left, right = self._ends()
+        if snap_centre and abs(event.x-(left+right)/2) <= self.px(8):
+            return self._set(.5)
+        return self._set((event.x-left)/(right-left))
+
+    def _ends(self):
+        margin = self.px(1)
+        return margin, max(margin+1, self.winfo_width()-margin)
+
+    def _make_thumb(self, enabled, focused):
+        size, supersample = self.px(20), 4
+        image = Image.new('RGBA', (size*supersample, size*supersample))
+        draw = ImageDraw.Draw(image)
+        centre = size*supersample/2
+        unit = size*supersample/20
+        def circle(radius, **options):
+            radius *= unit
+            draw.ellipse((centre-radius, centre-radius, centre+radius, centre+radius), **options)
+        if focused:
+            circle(9, outline='#D8B64C', width=max(1, round(unit)))
+        circle(7, fill=SURFACE if enabled else '#F0F0F0',
+               outline='#CFC8B2' if enabled else '#D1D1D1', width=max(1, round(unit)))
+        circle(3.8, fill=ACCENT if enabled else '#C4C4C4')
+        return ImageTk.PhotoImage(image.resize((size,size),Image.Resampling.LANCZOS), master=self)
+
+    def redraw(self):
+        self.delete('all')
+        left, right = self._ends()
+        y = self.px(10)
+        selected = max(0., min(1., float(self.variable.get())))
+        active = not self.instate(['disabled'])
+        coordinates = [left+(right-left)*index/4 for index in range(5)]
+        x = left+(right-left)*selected
+        rail_width = self.px(5)
+        rail_left, rail_right = left, right
+        self.create_line(rail_left,y,rail_right,y,width=rail_width,fill='#E8E8E8',
+                         capstyle=tk.BUTT)
+        self.create_line(rail_left,y,x,y,width=rail_width,
+                         fill=ACCENT if active else '#D1D1D1',capstyle=tk.BUTT)
+        for index,mark_x in enumerate(coordinates):
+            self.create_line(mark_x,y-self.px(3),mark_x,y+self.px(3),
+                             fill='#9A791A' if active else '#A8A8A8',
+                             width=self.px(2),tags='timing_tick')
+            self.create_text(mark_x,self.px(25),text=('-2','-1','0','+1','+2')[index],
+                             anchor='w' if index == 0 else 'e' if index == 4 else 'center',
+                             fill=TEXT if index == 2 and active else MUTED,
+                             font=('Segoe UI',9,'bold' if index == 2 else 'normal'),
+                             tags='timing_mark')
+        thumb_margin = self.px(10)
+        thumb_x = max(thumb_margin,min(self.winfo_width()-thumb_margin,x))
+        self.create_image(thumb_x,y,image=self._thumb_images[(active,active and self.focus_get() is self)],
+                          tags='timing_thumb')
+
+
 class FluentTheme:
     def __init__(self, root, px):
         self.root, self.px, self.images = root, px, []
@@ -33,6 +136,7 @@ class FluentTheme:
         s.theme_use('clam')
         s.configure('.', font=('Segoe UI', 10), background=BG, foreground=TEXT)
         s.configure('TFrame', background=BG)
+        s.configure('Timing.TFrame', background=SURFACE)
         s.configure('TLabel', background=BG, foreground=TEXT)
         s.configure('Muted.TLabel', foreground=MUTED)
         s.configure('Title.TLabel', font=('Segoe UI', 18, 'bold'))

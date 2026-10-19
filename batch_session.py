@@ -19,8 +19,9 @@ from app_settings import parse_stop_hotkey
 from jump_rope_bot import BotConfig, JumpRopeBot
 from session_flow import wait_for_result_page
 from vision import GameCapture
+from timing_control import DEFAULT_TIMING_POSITION, threshold_for_position, validate_timing_position
 
-APP_VERSION = '1.1.0'
+APP_VERSION = '1.2.0'
 LOG = logging.getLogger('jump-rope-auto')
 
 
@@ -33,11 +34,13 @@ class SessionConfig:
     rounds: int = 1
     stop_hotkey: str = 'F9'
     diagnostics: bool = False
+    timing_position: float = DEFAULT_TIMING_POSITION
 
     def validate(self):
         if type(self.rounds) is not int or not 1 <= self.rounds <= 999:
             raise ValueError('Round limit must be an integer from 1 to 999')
         parse_stop_hotkey(self.stop_hotkey)
+        validate_timing_position(self.timing_position)
 
 
 class BatchSession:
@@ -90,6 +93,8 @@ class BatchSession:
                 executable = Path(sys.executable) if getattr(sys, 'frozen', False) else None
                 manifest = {'app_version': APP_VERSION, 'round_limit': self.config.rounds,
                             'key_down_ms': 25,
+                            'timing_position': self.config.timing_position,
+                            'overhead_threshold': threshold_for_position(self.config.timing_position),
                             'startup_recognizer': 'pill_geometry_v1',
                             'capture_backend': 'dxgi', 'target_fps': 60,
                             'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest() if executable else None}
@@ -110,6 +115,7 @@ class BatchSession:
                     wait_for_round=True, auto_start=True,
                     capture_backend='dxgi', target_fps=60, startup_timeout=120,
                     key_down_time=.025, diagnostics_enabled=self.config.diagnostics,
+                    timing_position=self.config.timing_position,
                     round_timeout=180,
                     result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped)
                 with self._count_lock:
