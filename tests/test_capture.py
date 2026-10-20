@@ -20,6 +20,7 @@ def desktop(monkeypatch):
     monkeypatch.setattr(vision.win32gui, 'GetWindow', lambda h, _: state.above if h == 123 else 0)
     monkeypatch.setattr(vision.win32gui, 'IsWindowVisible', lambda _: True)
     monkeypatch.setattr(vision.win32gui, 'GetWindowRect', lambda _: state.overlay)
+    monkeypatch.setattr(vision.win32gui, 'GetWindowLong', lambda *_: 0)
     def cloak(hwnd, attr, result, size):
         result._obj.value = state.cloaked
         return 0
@@ -48,6 +49,74 @@ def test_fast_capture_rejects_unsafe_client(desktop, change):
 def test_hidden_virtual_desktop_window_is_not_a_visible_overlay(desktop):
     desktop.above, desktop.cloaked = 456, 1
     assert vision.ScreenCapture(123)._visible_client() == (100, 100, 100, 80)
+
+
+@pytest.fixture
+def layered_overlay(desktop, monkeypatch):
+    desktop.above = 456
+    state = SimpleNamespace(
+        style=vision.win32con.WS_EX_LAYERED | vision.win32con.WS_EX_TRANSPARENT
+              | vision.win32con.WS_EX_TOOLWINDOW,
+        attributes=(0, 0, 0), title='NVIDIA GeForce Overlay DT',
+        window_class='CEF-OSC-WIDGET')
+    monkeypatch.setattr(vision.win32gui, 'GetWindowLong', lambda *_: state.style)
+    monkeypatch.setattr(vision.win32gui, 'GetLayeredWindowAttributes', lambda _: state.attributes)
+    monkeypatch.setattr(vision.win32gui, 'GetWindowText', lambda _: state.title)
+    monkeypatch.setattr(vision.win32gui, 'GetClassName', lambda _: state.window_class)
+    return state
+
+
+def test_idle_nvidia_desktop_transparency_host_does_not_occlude(desktop, layered_overlay):
+    assert vision.ScreenCapture(123)._visible_client() == (100, 100, 100, 80)
+
+
+def test_uniform_zero_alpha_layer_does_not_occlude(desktop, layered_overlay):
+    layered_overlay.title = 'Unrelated transparent window'
+    layered_overlay.attributes = (0, 0, vision.win32con.LWA_ALPHA)
+    assert vision.ScreenCapture(123)._visible_client() == (100, 100, 100, 80)
+
+
+@pytest.mark.parametrize('change', [
+    'opaque', 'translucent', 'color_key', 'other_title', 'other_class',
+    'not_click_through', 'not_tool_window', 'not_layered',
+])
+def test_visible_or_unrecognized_layer_still_blocks(desktop, layered_overlay, change):
+    if change == 'opaque': layered_overlay.attributes = (0, 255, vision.win32con.LWA_ALPHA)
+    if change == 'translucent': layered_overlay.attributes = (0, 1, vision.win32con.LWA_ALPHA)
+    if change == 'color_key': layered_overlay.attributes = (0, 0, vision.win32con.LWA_COLORKEY)
+    if change == 'other_title': layered_overlay.title = 'NVIDIA GeForce Overlay'
+    if change == 'other_class': layered_overlay.window_class = 'OtherOverlay'
+    if change == 'not_click_through': layered_overlay.style &= ~vision.win32con.WS_EX_TRANSPARENT
+    if change == 'not_tool_window': layered_overlay.style &= ~vision.win32con.WS_EX_TOOLWINDOW
+    if change == 'not_layered': layered_overlay.style &= ~vision.win32con.WS_EX_LAYERED
+    with pytest.raises(RuntimeError, match=repr(layered_overlay.title)):
+        vision.ScreenCapture(123)._visible_client()
+
+
+def test_layer_query_failure_does_not_authorize_capture(desktop, layered_overlay, monkeypatch):
+    def failed(_):
+        raise vision.win32gui.error(5, 'GetLayeredWindowAttributes', 'Access denied')
+    monkeypatch.setattr(vision.win32gui, 'GetLayeredWindowAttributes', failed)
+    with pytest.raises(RuntimeError):
+        vision.ScreenCapture(123)._visible_client()
+
+
+def test_transparent_host_becoming_visible_blocks_next_guard(desktop, layered_overlay):
+    capture = vision.ScreenCapture(123)
+    assert capture._visible_client() == (100, 100, 100, 80)
+    layered_overlay.attributes = (0, 255, vision.win32con.LWA_ALPHA)
+    with pytest.raises(RuntimeError, match='NVIDIA GeForce Overlay DT'):
+        capture._visible_client()
+
+
+def test_transparent_host_does_not_hide_another_blocker(desktop, layered_overlay, monkeypatch):
+    monkeypatch.setattr(vision.win32gui, 'GetWindow', lambda h, _: {123:456, 456:789}.get(h,0))
+    monkeypatch.setattr(vision.win32gui, 'GetWindowLong',
+                        lambda h, _: layered_overlay.style if h == 456 else 0)
+    monkeypatch.setattr(vision.win32gui, 'GetWindowText',
+                        lambda h: layered_overlay.title if h == 456 else 'Blocking window')
+    with pytest.raises(RuntimeError, match='Blocking window'):
+        vision.ScreenCapture(123)._visible_client()
 
 
 @pytest.mark.parametrize('title', ['ChatGPT is using your computer. Esc to cancel',

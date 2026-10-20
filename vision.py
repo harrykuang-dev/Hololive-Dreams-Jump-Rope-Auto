@@ -77,6 +77,34 @@ class ScreenCapture:
         self.previous_bitmap = None
         self.closed = False
 
+    @staticmethod
+    def _non_occluding_layer(hwnd):
+        """Distinguish transparent compositor hosts from visible overlays.
+
+        Click-through alone does not imply invisible: an OSD may still draw
+        over the game. Re-read opacity on every guard check and fail closed
+        for per-pixel layers whose opacity cannot be queried.
+        """
+        try:
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+            if not style & win32con.WS_EX_LAYERED:
+                return False
+            color_key, alpha, flags = win32gui.GetLayeredWindowAttributes(hwnd)
+            if flags & win32con.LWA_ALPHA and alpha == 0:
+                return True
+            # NVIDIA's idle Desktop Transparency host reports a successful
+            # all-zero attribute query, yet keeps a full-screen HWND visible
+            # in Z order. Limit this compatibility case to its exact host
+            # identity and click-through tool-window state. Other zero-flag
+            # or visible NVIDIA layers must still block desktop capture.
+            transparent_tool = win32con.WS_EX_TRANSPARENT | win32con.WS_EX_TOOLWINDOW
+            return (color_key == alpha == flags == 0
+                    and style & transparent_tool == transparent_tool
+                    and win32gui.GetWindowText(hwnd) == 'NVIDIA GeForce Overlay DT'
+                    and win32gui.GetClassName(hwnd) == 'CEF-OSC-WIDGET')
+        except (OSError, win32gui.error):
+            return False
+
     def _visible_client(self):
         if (not win32gui.IsWindow(self.hwnd) or win32gui.IsIconic(self.hwnd)
                 or win32gui.GetForegroundWindow() != self.hwnd):
@@ -101,7 +129,8 @@ class ScreenCapture:
                     ctypes.c_void_p(above), 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
                 if status != 0 or not cloaked.value:
                     left, top, right, bottom = win32gui.GetWindowRect(above)
-                    if max(left, x) < min(right, x+width) and max(top, y) < min(bottom, y+height):
+                    if (max(left, x) < min(right, x+width) and max(top, y) < min(bottom, y+height)
+                            and not self._non_occluding_layer(above)):
                         title = win32gui.GetWindowText(above)
                         error = (TemporaryCaptureOverlayError
                                  if title in ('ChatGPT is using your computer. Esc to cancel',
