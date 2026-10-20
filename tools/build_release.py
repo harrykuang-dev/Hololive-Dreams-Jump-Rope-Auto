@@ -6,7 +6,8 @@ import sys
 
 def main():
     root = Path(__file__).resolve().parents[1]
-    subprocess.run([sys.executable,str(root/'tools'/'make_icon.py')],cwd=root,check=True)
+    # Tracked artwork is a release input. Regenerate it explicitly with
+    # make_icon.py only when updating the icon, never as a build side effect.
     subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--onefile','--windowed',
         '--name','HololiveDreamsJumpRopeAuto-1.2.1','--hidden-import','win32timezone',
         '--hidden-import','dxcam','--paths','.', '--icon','assets/jump-rope.ico',
