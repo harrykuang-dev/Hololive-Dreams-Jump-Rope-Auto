@@ -21,7 +21,7 @@ from session_flow import wait_for_result_page
 from vision import GameCapture
 from timing_control import DEFAULT_TIMING_POSITION, threshold_for_position, validate_timing_position
 
-APP_VERSION = '1.2.0'
+APP_VERSION = '1.2.1'
 LOG = logging.getLogger('jump-rope-auto')
 
 

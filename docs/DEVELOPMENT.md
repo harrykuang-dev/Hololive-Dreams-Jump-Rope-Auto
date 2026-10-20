@@ -1,4 +1,4 @@
-# 開發說明 — 1.2.0
+# 開發說明 — 1.2.1
 
 一般使用方式見 [README](../README.zh-TW.md)。
 
@@ -14,7 +14,7 @@ python main_ui.py
 python -m pytest -q
 python -m pytest -q -m gui
 python tools/build_release.py
-python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.2.0.exe --output build-verification.json
+python tools/verify_release_bundle.py dist/HololiveDreamsJumpRopeAuto-1.2.1.exe --output build-verification.json
 ```
 
 GUI 測試使用模擬會話，不操作遊戲，但會建立測試視窗。請在沒有實戰測試運行時執行。

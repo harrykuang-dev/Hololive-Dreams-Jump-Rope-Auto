@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.2.0
+# Hololive Dreams Auto Jump Rope — 1.2.1
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@ Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識
 
 ## 下載
 
-前往 [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.2.0)，下載附件中的 `HololiveDreamsJumpRopeAuto-1.2.0.exe`。
+前往 [GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.2.1)，下載附件中的 `HololiveDreamsJumpRopeAuto-1.2.1.exe`。
 
 只需執行這一個 EXE，無需安裝 Python。Release 附有 SHA-256 校驗檔；原始碼 ZIP 需自行建置。
 
@@ -44,7 +44,7 @@ Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識
 > ![DXGI 擷取錯誤訊息](docs/dxgi-unsupported-error.png)
 >
 > 1. 在 Windows「設定 → 系統 → 顯示器 → 進階型顯示器」選擇遊戲使用的主螢幕，查看螢幕所連接的顯卡名稱。
-> 2. 返回「顯示器 → 圖形」（Windows 10 為「圖形設定」），新增桌面應用程式，瀏覽並加入實際執行的 `HololiveDreamsJumpRopeAuto-1.2.0.exe`。
+> 2. 返回「顯示器 → 圖形」（Windows 10 為「圖形設定」），新增桌面應用程式，瀏覽並加入實際執行的 `HololiveDreamsJumpRopeAuto-1.2.1.exe`。
 > 3. 開啟該程式的「選項」，在「圖形喜好設定」中選擇上述顯卡並按「儲存」。「省電」通常對應集顯，「高效能」通常對應獨顯；以顯示的顯卡名稱為準。
 > 4. 完全關閉程式後重新開啟，再按「開始」測試。
 >

@@ -1,4 +1,4 @@
-# Hololive Dreams Auto Jump Rope — 1.2.0
+# Hololive Dreams Auto Jump Rope — 1.2.1
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
 
@@ -6,7 +6,7 @@ Windows 버전 《hololive Dreams》의 자동 줄넘기 프로그램입니다. 
 
 ## 다운로드
 
-[GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.2.0)에서 `HololiveDreamsJumpRopeAuto-1.2.0.exe`를 다운로드하세요.
+[GitHub Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/tag/v1.2.1)에서 `HololiveDreamsJumpRopeAuto-1.2.1.exe`를 다운로드하세요.
 
 EXE 하나만 실행하면 되며 Python 설치가 필요 없습니다. SHA-256 검증 파일도 제공됩니다. 소스 ZIP은 직접 빌드해야 합니다.
 
@@ -44,7 +44,7 @@ Windows 10／11 x64와 Windows 게임 클라이언트가 필요합니다. 게임
 > ![DXGI 화면 캡처 오류 메시지](docs/dxgi-unsupported-error.png)
 >
 > 1. Windows 설정 → 시스템 → 디스플레이 → 고급 디스플레이에서 게임에 사용하는 주 모니터를 선택하고, 연결된 GPU 이름을 확인합니다.
-> 2. 디스플레이 → 그래픽(Windows 10에서는 그래픽 설정)으로 돌아가 데스크톱 앱을 추가하고, 실제 실행하는 `HololiveDreamsJumpRopeAuto-1.2.0.exe`를 선택합니다.
+> 2. 디스플레이 → 그래픽(Windows 10에서는 그래픽 설정)으로 돌아가 데스크톱 앱을 추가하고, 실제 실행하는 `HololiveDreamsJumpRopeAuto-1.2.1.exe`를 선택합니다.
 > 3. 해당 앱의 옵션을 열고 그래픽 기본 설정에서 위 GPU를 선택한 다음 저장을 누릅니다. 절전은 보통 내장 GPU, 고성능은 보통 외장 GPU에 해당하므로 표시된 GPU 이름을 확인하세요.
 > 4. 프로그램을 완전히 종료한 뒤 다시 실행하고 시작을 눌러 테스트합니다.
 >
