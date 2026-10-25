@@ -63,17 +63,8 @@ class RoundDiagnostics:
         self.check_health()
         # Capture owns each returned array. The controller does not modify it;
         # the encoder may safely retain it without a full-screen copy here.
-        from candidates import active
-        tracker = getattr(active, 'tracker', None)
-        columns = getattr(tracker, 'observed_columns', None)
-        points = getattr(tracker, 'points', None)
+        columns = None
         entry = {'t': round(elapsed, 6), **values, **(telemetry or {})}
-        if entry.get('detector_ms') is not None:
-            if points is not None:
-                entry['rope_points'] = np.asarray(points).tolist()
-            columns = columns.copy() if columns is not None else None
-        else:
-            columns = None
         size = frame.nbytes + (columns.nbytes if columns is not None else 0)
         try:
             with self._queue_lock:
@@ -196,6 +187,10 @@ class RoundDiagnostics:
             overlay=frame.copy()
             pts=np.asarray(entry.get('rope_points',[]),np.int32)
             if len(pts):cv2.polylines(overlay,[pts],False,(255,0,255),2,cv2.LINE_AA)
+            for box, color in ((entry.get('rope_xyxy'), (255,0,255)), (entry.get('marker_xyxy'), (0,220,255))):
+                if box is not None:
+                    x0,y0,x1,y1=box
+                    cv2.rectangle(overlay,(round(x0),round(y0)),(round(x1),round(y1)),color,2)
             label=f"t={entry['t']:.3f} {entry.get('phase')} candidate={entry.get('candidate')} input={entry.get('clicked')}"
             cv2.rectangle(overlay,(0,0),(960,42),(0,0,0),-1)
             cv2.putText(overlay,label,(6,16),cv2.FONT_HERSHEY_SIMPLEX,.44,(255,255,255),1,cv2.LINE_AA)
@@ -246,7 +241,7 @@ class RoundDiagnostics:
         self._write_manifest()
 
     def _write_manifest(self):
-        manifest = {'format_version': 2, 'app_version': '1.2.1', 'key_down_ms': 25,
+        manifest = {'format_version': 2, 'app_version': '1.3.0', 'key_down_ms': 25,
                     'video': None, 'result': self.result, 'recording': self.performance,
                     'screenshots':self.saved_shots,'failure_window':self.saved_context,
                     'failure_events':self.context_events,

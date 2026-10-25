@@ -1,4 +1,4 @@
-"""Native desktop interface for the jump-rope assistant."""
+"""Native desktop interface for the jump-rope program."""
 from __future__ import annotations
 import ctypes
 import logging
@@ -65,7 +65,8 @@ class JumpRopeApp:
         font.nametofont('TkFixedFont').configure(family='Consolas', size=10)
         root.configure(bg=self.BG)
         width, height = window_work_area(root)
-        root.geometry(f'{min(self.px(450),width-self.px(40))}x{min(self.px(800),height-self.px(40))}')
+        # Client pixels at 120 DPI; scale independently of Tk's font units.
+        root.geometry(f'{min(round(517*self.dpi/120),width-self.px(40))}x{min(round(1055*self.dpi/120),height-self.px(40))}')
         root.minsize(min(self.px(360),width-self.px(40)), min(self.px(680),height-self.px(40)))
         root.protocol('WM_DELETE_WINDOW', self.close)
         try:
@@ -74,6 +75,9 @@ class JumpRopeApp:
             pass
         self.language = tk.StringVar(root, value='繁體中文')
         self.target = tk.StringVar(root, value='1')
+        self.score_mode = tk.StringVar(root,value='unlimited')
+        self.score_amount = tk.StringVar(root,value='100')
+        self._controls_running=False
         self.stop_key = tk.StringVar(root, value='F9')
         self.shortcut_display = tk.StringVar(root, value='F9')
         self.start_key = tk.StringVar(root, value='F8')
@@ -107,8 +111,18 @@ class JumpRopeApp:
         self._resize_job = None
         self._layout_size = None
         self._compact = None
-        main = self.main_frame = ttk.Frame(self.root, padding=self.px(24))
-        main.pack(fill='both', expand=True)
+        viewport=ttk.Frame(self.root)
+        viewport.pack(fill='both',expand=True)
+        viewport.rowconfigure(0,weight=1);viewport.columnconfigure(0,weight=1)
+        self.page_canvas=tk.Canvas(viewport,bg=self.BG,highlightthickness=0,bd=0)
+        self.page_canvas.grid(row=0,column=0,sticky='nsew')
+        self.page_scroll=ttk.Scrollbar(viewport,command=self.page_canvas.yview)
+        self.page_canvas.configure(yscrollcommand=self.page_scroll.set)
+        main = self.main_frame = ttk.Frame(self.page_canvas, padding=self.px(24))
+        self.page_item=self.page_canvas.create_window(0,0,window=main,anchor='nw')
+        self.page_canvas.bind('<Configure>',self.schedule_resize)
+        self.root.bind('<MouseWheel>',self._scroll_page,add='+')
+        self.root.bind('<FocusIn>',self._focus_visible,add='+')
         main.columnconfigure(0, weight=1)
         main.rowconfigure(8, weight=1, minsize=self.px(80))
         def label(name, row, style='TLabel', pady=0):
@@ -140,10 +154,10 @@ class JumpRopeApp:
         form.grid(row=4,column=0,sticky='ew',pady=(0,self.px(12)))
         form.columnconfigure(1,weight=1)
         self.form_labels = []
-        for row,name in ((0,'language_label'),(1,'rounds_label'),(2,'timing_label'),
-                         (3,'start_shortcut_label'),(4,'shortcut_label')):
+        for row,name in ((0,'language_label'),(1,'rounds_label'),(2,'score_label'),(3,'timing_label'),
+                         (4,'start_shortcut_label'),(5,'shortcut_label')):
             widget = ttk.Label(form,style='Card.TLabel')
-            widget.grid(row=row,column=0,sticky='w',padx=(0,self.px(12)),pady=self.px(6))
+            widget.grid(row=row,column=0,sticky='w',padx=(0,self.px(18)),pady=self.px(6))
             setattr(self,name,widget)
             self.form_labels.append(widget)
         self.language_choice = ttk.Combobox(form,textvariable=self.language,values=tuple(LANGUAGES),state='readonly')
@@ -167,8 +181,26 @@ class JumpRopeApp:
                 style='DisabledField.TFrame' if field.instate(['disabled']) else 'Field.TFrame'),add='+')
             return field
         self.target_entry = entry('target',self.target,1)
+        self.score_options=ttk.Frame(form,style='Surface.TFrame')
+        self.score_options.grid(row=2,column=1,sticky='ew',pady=self.px(6))
+        self.score_options.columnconfigure(2,weight=1)
+        self.score_unlimited=ttk.Radiobutton(self.score_options,variable=self.score_mode,
+            value='unlimited',command=self._update_score_controls)
+        self.score_unlimited.grid(row=0,column=0,sticky='w',padx=(0,self.px(10)))
+        self.score_custom=ttk.Radiobutton(self.score_options,variable=self.score_mode,
+            value='custom',text='',command=self._update_score_controls)
+        self.score_custom.grid(row=0,column=1,sticky='w')
+        score_field=ttk.Frame(self.score_options,style='DisabledField.TFrame',padding=(self.px(8),self.px(5)))
+        score_field.grid(row=0,column=2,sticky='ew');score_field.columnconfigure(0,weight=1)
+        score_field.configure(height=self.language_choice.winfo_reqheight());score_field.grid_propagate(False)
+        score_field.rowconfigure(0,weight=1)
+        self.field_frames['score']=score_field
+        self.score_entry=FluentEntry(score_field,textvariable=self.score_amount,width=6,state='disabled')
+        self.score_entry.grid(row=0,column=0,sticky='ew')
+        self.score_entry.bind('<FocusIn>',lambda _:score_field.configure(style='FocusField.TFrame'),add='+')
+        self.score_entry.bind('<FocusOut>',lambda _:self._update_score_controls(),add='+')
         timing_frame = ttk.Frame(form,style='Timing.TFrame')
-        timing_frame.grid(row=2,column=1,sticky='ew',pady=self.px(2))
+        timing_frame.grid(row=3,column=1,sticky='ew',pady=self.px(2))
         timing_frame.columnconfigure((0,1,2),weight=1)
         self.timing_choice = FluentTimingSlider(timing_frame,variable=self.timing,
                                                 px=self.px,on_change=self._timing_changed)
@@ -179,11 +211,11 @@ class JumpRopeApp:
         self.timing_value.grid(row=1,column=1)
         self.timing_late = ttk.Label(timing_frame,style='CardMuted.TLabel')
         self.timing_late.grid(row=1,column=2,sticky='e')
-        self.start_shortcut_entry = entry('start',self.start_shortcut_display,3,True)
+        self.start_shortcut_entry = entry('start',self.start_shortcut_display,4,True)
         self.start_shortcut_entry.bind('<Button-1>',self.begin_start_capture)
         self.start_shortcut_entry.bind('<FocusOut>',self.end_capture)
         self.start_shortcut_entry.bind('<KeyPress>',self.capture_key)
-        self.shortcut_entry = entry('stop',self.shortcut_display,4,True)
+        self.shortcut_entry = entry('stop',self.shortcut_display,5,True)
         self.shortcut_entry.bind('<Button-1>',self.begin_capture)
         self.shortcut_entry.bind('<FocusOut>',self.end_capture)
         self.shortcut_entry.bind('<KeyPress>',self.capture_key)
@@ -211,9 +243,49 @@ class JumpRopeApp:
         self.log.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y',padx=(self.px(8),0))
         self.log.pack(fill='both',expand=True)
-        self.version_label = ttk.Label(main,text=f'v{APP_VERSION}',style='Muted.TLabel')
+        self.version_label = ttk.Label(main,text=f'v{APP_VERSION}',style='Muted.TLabel',cursor='hand2',takefocus=True)
         self.version_label.grid(row=9,column=0,sticky='w',pady=(self.px(8),0))
+        for event in ('<Button-1>','<Return>','<space>'):
+            self.version_label.bind(event,self.open_project)
         main.bind('<Configure>',self.schedule_resize)
+
+    def open_project(self,_event=None):
+        webbrowser.open(PROJECT_URL)
+        return 'break'
+
+    def _scroll_page(self,event):
+        # The activity log retains its own scrolling; never hijack its wheel.
+        if event.widget is self.log or event.widget.winfo_toplevel()!=self.root:
+            return
+        if self.page_canvas.yview()!=(0.,1.):
+            units=-int(event.delta/120) if abs(event.delta)>=120 else (-1 if event.delta>0 else 1)
+            self.page_canvas.yview_scroll(units,'units')
+            return 'break'
+
+    def _focus_visible(self,event):
+        if event.widget.winfo_toplevel()!=self.root:return
+        self.root.after_idle(lambda:self._reveal_widget(event.widget))
+
+    def _reveal_widget(self,widget):
+        if self._closing or not widget.winfo_exists() or self.page_canvas.yview()==(0.,1.):return
+        y=widget.winfo_rooty()-self.main_frame.winfo_rooty()
+        top=self.page_canvas.canvasy(0);height=self.page_canvas.winfo_height()
+        bottom=y+widget.winfo_height()
+        if y<top:target=y-self.px(8)
+        elif bottom>top+height:target=bottom-height+self.px(8)
+        else:return
+        total=max(1,self.main_frame.winfo_height())
+        self.page_canvas.yview_moveto(max(0,target/total))
+
+    def _sync_scroll_area(self):
+        width=max(1,self.page_canvas.winfo_width());height=max(1,self.page_canvas.winfo_height())
+        content=max(height,self.main_frame.winfo_reqheight())
+        self.page_canvas.itemconfigure(self.page_item,width=width,height=content)
+        self.page_canvas.configure(scrollregion=(0,0,width,content))
+        if content>height:
+            self.page_scroll.grid(row=0,column=1,sticky='ns')
+        else:
+            self.page_scroll.grid_remove();self.page_canvas.yview_moveto(0)
 
     def schedule_resize(self,_event=None):
         if self._resize_job is None and not self._closing:
@@ -223,7 +295,8 @@ class JumpRopeApp:
         self._resize_job = None
         if self._closing:
             return
-        width,height = self.main_frame.winfo_width(),self.main_frame.winfo_height()
+        self._sync_scroll_area()
+        width,height = self.page_canvas.winfo_width(),self.page_canvas.winfo_height()
         compact = height < self.px(720)
         size = (width,compact)
         if self._layout_size == size:
@@ -233,6 +306,8 @@ class JumpRopeApp:
         self.main_frame.configure(padding=self.px(outer))
         if compact != self._compact:
             self._compact = compact
+            self.main_frame.rowconfigure(8,minsize=self.px(60 if compact else 80))
+            self.logs.configure(padding=self.px(8 if compact else 12))
             for card in (self.summary,self.form):
                 card.configure(padding=self.px(padding))
                 card.grid_configure(pady=(0,self.px(gap)))
@@ -240,13 +315,17 @@ class JumpRopeApp:
             self.theme.style.configure('Title.TLabel',font=('Segoe UI',16 if compact else 18,'bold'))
             self.controls.grid_configure(pady=(0,self.px(gap)))
             self.status.grid_configure(pady=(0,self.px(gap)))
-            self.instructions.grid_configure(pady=(self.px(8),self.px(gap)))
+            self.instructions.grid_configure(pady=(self.px(4 if compact else 8),self.px(gap)))
+            self.logs.grid_configure(pady=(self.px(8 if compact else 12),0))
+            self.version_label.grid_configure(pady=(self.px(0 if compact else 8),0))
             for label in self.form_labels:
                 label.grid_configure(pady=self.px(3 if compact else 6))
             for field in self.field_frames.values():
                 field.grid_configure(pady=self.px(3 if compact else 6))
                 field.configure(padding=(self.px(8),self.px(3 if compact else 5)))
             self.language_choice.grid_configure(pady=self.px(3 if compact else 6))
+            self.score_options.grid_configure(pady=self.px(3 if compact else 6))
+            self.field_frames['score'].grid_configure(pady=0)
             self.language_choice.configure(style='Compact.TCombobox' if compact else 'TCombobox')
             for field in self.field_frames.values():
                 field.configure(height=self.language_choice.winfo_reqheight())
@@ -261,6 +340,7 @@ class JumpRopeApp:
         self.root.title(f'Hololive Dreams — {self.tr("title")}')
         for widget,key in ((self.title_label,'title'),(self.instructions,'instructions'),
                 (self.language_label,'language'),(self.rounds_label,'rounds'),
+                (self.score_label,'score_limit'),(self.score_unlimited,'unlimited'),
                 (self.timing_label,'timing'),(self.timing_early,'timing_early'),
                 (self.timing_late,'timing_late'),
                 (self.shortcut_label,'shortcut'),(self.start_shortcut_label,'start_shortcut'),(self.start_button,'start'),
@@ -283,10 +363,17 @@ class JumpRopeApp:
         self.counter.configure(text=self.tr('counter',done=done,target=target))
         self.inputs_label.configure(text=self.tr('inputs',count=inputs))
 
+    def _update_score_controls(self):
+        disabled=self._controls_running or self.score_mode.get()=='unlimited'
+        self.score_entry.configure(state='disabled' if disabled else 'normal')
+        self.field_frames['score'].configure(style='DisabledField.TFrame' if disabled else 'Field.TFrame')
+        for widget in (self.score_unlimited,self.score_custom):
+            widget.configure(state='disabled' if self._controls_running else 'normal')
+
     def _timing_changed(self, _value=None):
         position = max(0.,min(1.,self.timing.get()))
         if hasattr(self,'timing_value'):
-            amount = f'{abs(position-.5)*4:.2f}'
+            amount = f'{abs(position-.5)*80:.1f}'
             self.timing_value.configure(text=self.tr('timing_default') if position == .5
                 else self.tr('timing_early_n',count=amount) if position < .5
                 else self.tr('timing_late_n',count=amount))
@@ -338,6 +425,7 @@ class JumpRopeApp:
         return 'break'
 
     def set_controls(self,running):
+        self._controls_running=running
         self._hotkey_generation += 1
         self.end_capture()
         self.start_button.configure(state='disabled' if running else 'normal')
@@ -351,6 +439,7 @@ class JumpRopeApp:
             widget.configure(state='disabled' if running else 'normal')
         for frame in self.field_frames.values():
             frame.configure(style='DisabledField.TFrame' if running else 'Field.TFrame')
+        self._update_score_controls()
 
     def append_log(self,message):
         self.log.configure(state='normal')
@@ -368,7 +457,8 @@ class JumpRopeApp:
         try:
             config = SessionConfig(rounds=int(self.target.get()),stop_hotkey=self.stop_key.get(),
                                    diagnostics=self.diagnostics.get(),
-                                   timing_position=self.timing.get())
+                                   timing_position=self.timing.get(),
+                                   score_limit=None if self.score_mode.get()=='unlimited' else int(self.score_amount.get()))
             config.validate()
         except ValueError:
             messagebox.showerror(self.tr('error'),self.tr('invalid'),parent=self.root)
@@ -416,6 +506,10 @@ class JumpRopeApp:
                         self.append_log(self.tr('hotkey_error',key=value[0]))
                 elif kind == 'round':
                     self.status.configure(text=self.tr('running',index=value[0],target=value[1]),foreground=self.STATUS_COLOR)
+                elif kind == 'score_limit':
+                    message=self.tr('score_wait',score=value)
+                    self.status.configure(text=message,foreground=self.STATUS_COLOR)
+                    self.append_log(message)
                 elif kind == 'round_done':
                     self.append_log(self.tr('round_done',index=value[0],reason=self.reason(value[1]),count=value[2]))
                 elif kind == 'error':
@@ -534,4 +628,21 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    if '--cpu' in sys.argv:raise SystemExit('CPU inference is no longer supported')
+    if '--directml' in sys.argv:
+        import os
+        os.environ['JUMPROPE_BACKEND']='directml'
+    if '--check-only' in sys.argv:
+        from detector import FullFrameDetector
+        detector=FullFrameDetector()
+        from pathlib import Path
+        import json
+        report={'status':'ok','backend':detector.backend,'fallback_reason':detector.fallback_reason,
+                'adapter':getattr(detector.runtime,'adapter',None),'cpu_inference':False,
+                'precision':getattr(detector.runtime,'precision','fp32'),
+                'torch_imported':'torch' in sys.modules,'capture':False,'input':False}
+        if '--report' in sys.argv:
+            Path(sys.argv[sys.argv.index('--report')+1]).write_text(json.dumps(report),encoding='utf-8')
+    else:
+        main()

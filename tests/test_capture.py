@@ -211,8 +211,8 @@ def test_dxgi_f9_interrupts_wait_without_returning_a_frame(desktop, monkeypatch)
     camera = fake_dxgi(desktop, iter([None]))
     capture = vision.DxgiCapture(123, camera_factory=lambda **kwargs: camera)
     keys = iter([0, 0x8000])
-    monkeypatch.setattr(vision.win32api, 'GetAsyncKeyState', lambda _: next(keys))
-    with pytest.raises(RuntimeError, match='F9'):
+    capture.stop_requested = lambda: bool(next(keys)&0x8000)
+    with pytest.raises(InterruptedError, match='Capture stopped'):
         capture.grab()
     capture.close()
 

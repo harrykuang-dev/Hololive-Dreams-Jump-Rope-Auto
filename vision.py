@@ -197,9 +197,10 @@ class DxgiCapture:
     This backend currently supports a game wholly on the primary monitor.
     """
     def __init__(self, hwnd, *, camera_factory=None, clock=time.perf_counter,
-                 sleeper=time.sleep, fresh_timeout=.5):
+                 sleeper=time.sleep, fresh_timeout=.5, stop_requested=lambda:False):
         self.guard = ScreenCapture(hwnd)
         self.clock, self.sleeper = clock, sleeper
+        self.stop_requested = stop_requested
         self.fresh_timeout = fresh_timeout
         self.capture_events = []
         self.closed = False
@@ -227,8 +228,8 @@ class DxgiCapture:
         deadline = wait_started+self.fresh_timeout
         none_count = 0
         while True:
-            if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
-                raise RuntimeError('F9 已停止 DXGI 等待；不會繼續輸入')
+            if self.stop_requested():
+                raise InterruptedError('Capture stopped')
             # Each call must acquire a NEW rendered frame. None never means
             # permission to reuse a previously observed approach for input.
             frame = self.camera.grab(region=(x, y, x+width, y+height),
@@ -262,12 +263,12 @@ class DxgiCapture:
 
 
 class GameCapture:
-    def __init__(self, hwnd, backend='screen'):
+    def __init__(self, hwnd, backend='screen', *, stop_requested=lambda:False):
         if backend not in ('screen', 'printwindow', 'dxgi'):
             raise ValueError('Unknown capture backend')
         self.backend = backend
         self.impl = {'screen': ScreenCapture, 'printwindow': PrintWindowCapture,
-                     'dxgi': DxgiCapture}[backend](hwnd)
+                     'dxgi': DxgiCapture}[backend](hwnd, **({'stop_requested':stop_requested} if backend=='dxgi' else {}))
 
     def grab(self):
         return self.impl.grab()

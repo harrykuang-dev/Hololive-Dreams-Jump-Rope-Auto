@@ -19,9 +19,9 @@ from app_settings import parse_stop_hotkey
 from jump_rope_bot import BotConfig, JumpRopeBot
 from session_flow import wait_for_result_page
 from vision import GameCapture
-from timing_control import DEFAULT_TIMING_POSITION, threshold_for_position, validate_timing_position
+from timing_control import DEFAULT_TIMING_POSITION, offset_ms, validate_timing_position
 
-APP_VERSION = '1.2.1'
+APP_VERSION = '1.3.0'
 LOG = logging.getLogger('jump-rope-auto')
 
 
@@ -35,12 +35,15 @@ class SessionConfig:
     stop_hotkey: str = 'F9'
     diagnostics: bool = False
     timing_position: float = DEFAULT_TIMING_POSITION
+    score_limit: int | None = None
 
     def validate(self):
         if type(self.rounds) is not int or not 1 <= self.rounds <= 999:
             raise ValueError('Round limit must be an integer from 1 to 999')
         parse_stop_hotkey(self.stop_hotkey)
         validate_timing_position(self.timing_position)
+        if self.score_limit is not None and (type(self.score_limit) is not int or not 1<=self.score_limit<=999):
+            raise ValueError('Score limit must be an integer from 1 to 999 or None')
 
 
 class BatchSession:
@@ -94,8 +97,9 @@ class BatchSession:
                 manifest = {'app_version': APP_VERSION, 'round_limit': self.config.rounds,
                             'key_down_ms': 25,
                             'timing_position': self.config.timing_position,
-                            'overhead_threshold': threshold_for_position(self.config.timing_position),
-                            'startup_recognizer': 'pill_geometry_v1',
+                            'timing_offset_ms': offset_ms(self.config.timing_position),
+                            'score_limit':self.config.score_limit,
+                            'startup_recognizer': 'pill_geometry_v1', 'detector': 'yolo26n-whole-rope-marker',
                             'capture_backend': 'dxgi', 'target_fps': 60,
                             'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest() if executable else None}
                 (self.directory / 'session.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
@@ -103,6 +107,23 @@ class BatchSession:
                 handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
                 LOG.addHandler(handler)
                 self.notify('diagnostics', str(self.directory))
+            detector = None
+            if self._bot_factory is JumpRopeBot:
+                from detector import FullFrameDetector
+                LOG.info('正在準備辨識模型')
+                detector = FullFrameDetector(stopped=self._stopped)
+                if self.directory:
+                    manifest['inference_backend'] = detector.backend
+                    manifest['backend_fallback_reason'] = detector.fallback_reason
+                    manifest['gpu_adapter'] = getattr(detector.runtime,'adapter',None)
+                    manifest['cpu_inference'] = False
+                    from timing_control import control_config
+                    manifest['frame_validity_ms'] = control_config(
+                        self.config.timing_position,backend=detector.backend)['frame_validity_ms']
+                    (self.directory / 'session.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+                if self._stopped():
+                    self.stop_reason = 'stopped'
+                    return
             for index in range(1, self.config.rounds+1):
                 if self._stopped():
                     self.stop_reason = 'stopped'
@@ -116,8 +137,10 @@ class BatchSession:
                     capture_backend='dxgi', target_fps=60, startup_timeout=120,
                     key_down_time=.025, diagnostics_enabled=self.config.diagnostics,
                     timing_position=self.config.timing_position,
-                    round_timeout=180,
-                    result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped)
+                    score_limit=self.config.score_limit,
+                    round_timeout=900,
+                    result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped,
+                    **({'detector':detector,'score_notify':lambda score:self.notify('score_limit',score)} if detector is not None else {}))
                 with self._count_lock:
                     self.current_bot = bot
                 try:
@@ -143,6 +166,9 @@ class BatchSession:
                         archive = recorder.package({
                             'performance': getattr(bot, 'basic_performance', {}),
                             'input_pulses': getattr(bot, 'input_pulses', []),
+                            'score_limit':self.config.score_limit,
+                            'score_limit_reached':getattr(bot,'score_limit_reached',False),
+                            'confirmed_stop_score':getattr(bot,'confirmed_score',None) if getattr(bot,'score_limit_reached',False) else None,
                             'app_version': APP_VERSION})
                         self.notify('archive', str(archive))
                 if not finished or index == self.config.rounds or self._stopped():
@@ -153,6 +179,9 @@ class BatchSession:
                         capture_factory=lambda hwnd: GameCapture(hwnd, backend='dxgi')):
                     self.stop_reason = 'result_not_confirmed'
                     break
+            self.notify('finished', self.stop_reason)
+        except InterruptedError:
+            self.stop_reason = 'stopped'
             self.notify('finished', self.stop_reason)
         except Exception:
             self.stop_reason = 'error'

@@ -117,7 +117,7 @@ class FluentTimingSlider(tk.Canvas):
             self.create_line(mark_x,y-self.px(3),mark_x,y+self.px(3),
                              fill='#9A791A' if active else '#A8A8A8',
                              width=self.px(2),tags='timing_tick')
-            self.create_text(mark_x,self.px(25),text=('-2','-1','0','+1','+2')[index],
+            self.create_text(mark_x,self.px(25),text=('-40','-20','0','+20','+40')[index],
                              anchor='w' if index == 0 else 'e' if index == 4 else 'center',
                              fill=TEXT if index == 2 and active else MUTED,
                              font=('Segoe UI',9,'bold' if index == 2 else 'normal'),
@@ -136,6 +136,7 @@ class FluentTheme:
         s.theme_use('clam')
         s.configure('.', font=('Segoe UI', 10), background=BG, foreground=TEXT)
         s.configure('TFrame', background=BG)
+        s.configure('Surface.TFrame',background=SURFACE)
         s.configure('Timing.TFrame', background=SURFACE)
         s.configure('TLabel', background=BG, foreground=TEXT)
         s.configure('Muted.TLabel', foreground=MUTED)
@@ -164,6 +165,7 @@ class FluentTheme:
         self.help_disabled_icon = self.icon('help', '#A0A0A0')
         self.combo()
         self.checkbox()
+        self.radio()
         s.configure('Vertical.TScrollbar', background='#D6D6D6', troughcolor=SURFACE,
                     borderwidth=0, arrowsize=0, width=px(6))
         s.map('Vertical.TScrollbar', background=[('pressed', '#999999'), ('active', '#ADADAD')])
@@ -266,3 +268,23 @@ class FluentTheme:
         self.style.configure('TCheckbutton', background=BG, padding=0,
                              indicatormargin=(0, 0, self.px(6), 0))
         self.style.map('TCheckbutton', background=[('active', BG)], foreground=[('disabled', '#A0A0A0')])
+
+    def radio(self):
+        def indicator(selected,disabled=False):
+            def paint(draw,size,unit):
+                _,h=size;w=h
+                outline='#BDBDBD' if disabled else ACCENT if selected else '#8A8A8A'
+                draw.ellipse((unit,unit,w-unit,h-unit),fill=SURFACE,outline=outline,
+                             width=max(1,round(unit*(2 if selected else 1))))
+                if selected:draw.ellipse((w*.32,h*.32,w*.68,h*.68),fill=outline)
+            return self.raster((20,18),paint)
+        name=self.prefix+'.radio'
+        self.style.element_create(name,'image',indicator(False),
+            ('disabled','selected',indicator(True,True)),('disabled',indicator(False,True)),
+            ('selected',indicator(True)),sticky='')
+        self.style.layout('TRadiobutton',[('Radiobutton.padding',{'sticky':'nswe','children':[
+            (name,{'side':'left','sticky':''}),('Radiobutton.focus',{'side':'left','sticky':'nswe',
+                'children':[('Radiobutton.label',{'sticky':'nswe'})]})]})])
+        self.style.configure('TRadiobutton',background=SURFACE,
+                             indicatormargin=(0,0,self.px(6),0),padding=0)
+        self.style.map('TRadiobutton',foreground=[('disabled','#A0A0A0')],background=[('active',SURFACE)])

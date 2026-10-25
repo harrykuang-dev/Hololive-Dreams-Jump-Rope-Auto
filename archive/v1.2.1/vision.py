@@ -1,0 +1,467 @@
+"""Screen capture and motion-based rope detection for Hololive Dreams."""
+
+from __future__ import annotations
+
+import ctypes
+from pathlib import Path
+import sys
+import time
+
+import cv2
+import numpy as np
+import win32gui
+import win32api
+import win32ui
+import win32con
+
+
+class TemporaryCaptureOverlayError(RuntimeError):
+    """Computer Use's transient launch indicators still obstruct the client."""
+
+
+class NoFreshFrameError(RuntimeError):
+    """No new desktop frame; never authorizes reusing captured pixels."""
+
+
+class RecoveredFrameGap(NoFreshFrameError):
+    """Fresh capture resumed after a gap; discard it and reset tracking."""
+
+
+class PrintWindowCapture:
+    """Capture a Unity window even when another application covers it."""
+
+    def __init__(self, hwnd: int) -> None:
+        self.hwnd = hwnd
+
+    def grab(self) -> np.ndarray:
+        # Window rectangles and PrintWindow must use the same physical pixels.
+        ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+        left, top, right, bottom = win32gui.GetWindowRect(self.hwnd)
+        width, height = right - left, bottom - top
+        window_dc = win32gui.GetWindowDC(self.hwnd)
+        source = win32ui.CreateDCFromHandle(window_dc)
+        memory = source.CreateCompatibleDC()
+        bitmap = win32ui.CreateBitmap()
+        try:
+            bitmap.CreateCompatibleBitmap(source, width, height)
+            previous_bitmap = memory.SelectObject(bitmap)
+            # PW_RENDERFULLCONTENT captures Unity correctly on current Windows.
+            if not __import__("ctypes").windll.user32.PrintWindow(self.hwnd, memory.GetSafeHdc(), 2):
+                raise RuntimeError("無法擷取遊戲畫面")
+            pixels = bitmap.GetBitmapBits(True)
+            frame = np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
+            cx, cy = win32gui.ClientToScreen(self.hwnd, (0, 0))
+            _, _, cw, ch = win32gui.GetClientRect(self.hwnd)
+            return frame[cy-top:cy-top+ch, cx-left:cx-left+cw]
+        finally:
+            if 'previous_bitmap' in locals():
+                memory.SelectObject(previous_bitmap)
+            win32gui.DeleteObject(bitmap.GetHandle())
+            memory.DeleteDC()
+            # The source wraps a borrowed window DC: ReleaseDC, not DeleteDC.
+            # PyCDC exposes no Detach method.
+            win32gui.ReleaseDC(self.hwnd, window_dc)
+
+
+class ScreenCapture:
+    """Copy the visible client from the desktop, with reusable GDI resources.
+
+    Unlike PrintWindow this does not ask Unity to render synchronously.
+    Foreground, on-screen and unobscured client checks are mandatory. Never
+    fall back through an occlusion: another application's pixels are unsafe.
+    """
+    def __init__(self, hwnd):
+        self.hwnd = hwnd
+        self.size = None
+        self.window_dc = self.source = self.memory = self.bitmap = None
+        self.previous_bitmap = None
+        self.closed = False
+
+    @staticmethod
+    def _non_occluding_layer(hwnd):
+        """Distinguish transparent compositor hosts from visible overlays.
+
+        Click-through alone does not imply invisible: an OSD may still draw
+        over the game. Re-read opacity on every guard check and fail closed
+        for per-pixel layers whose opacity cannot be queried.
+        """
+        try:
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+            if not style & win32con.WS_EX_LAYERED:
+                return False
+            color_key, alpha, flags = win32gui.GetLayeredWindowAttributes(hwnd)
+            if flags & win32con.LWA_ALPHA and alpha == 0:
+                return True
+            # NVIDIA's idle Desktop Transparency host reports a successful
+            # all-zero attribute query, yet keeps a full-screen HWND visible
+            # in Z order. Limit this compatibility case to its exact host
+            # identity and click-through tool-window state. Other zero-flag
+            # or visible NVIDIA layers must still block desktop capture.
+            transparent_tool = win32con.WS_EX_TRANSPARENT | win32con.WS_EX_TOOLWINDOW
+            return (color_key == alpha == flags == 0
+                    and style & transparent_tool == transparent_tool
+                    and win32gui.GetWindowText(hwnd) == 'NVIDIA GeForce Overlay DT'
+                    and win32gui.GetClassName(hwnd) == 'CEF-OSC-WIDGET')
+        except (OSError, win32gui.error):
+            return False
+
+    def _visible_client(self):
+        if (not win32gui.IsWindow(self.hwnd) or win32gui.IsIconic(self.hwnd)
+                or win32gui.GetForegroundWindow() != self.hwnd):
+            raise RuntimeError('高速擷取需要遊戲在前景且未最小化；已停止')
+        _, _, width, height = win32gui.GetClientRect(self.hwnd)
+        x, y = win32gui.ClientToScreen(self.hwnd, (0, 0))
+        user = ctypes.windll.user32
+        vx, vy = user.GetSystemMetrics(76), user.GetSystemMetrics(77)
+        vw, vh = user.GetSystemMetrics(78), user.GetSystemMetrics(79)
+        if width <= 0 or height <= 0 or x < vx or y < vy or x+width > vx+vw or y+height > vy+vh:
+            raise RuntimeError('遊戲客戶區不完整位於螢幕內；已停止')
+        # Walk only the windows above the target in Z order, not all processes.
+        above = win32gui.GetWindow(self.hwnd, win32con.GW_HWNDPREV)
+        seen = set()
+        while above:
+            if above in seen:
+                raise RuntimeError('視窗順序改變，無法確認無遮擋；已停止')
+            seen.add(above)
+            if win32gui.IsWindowVisible(above) and not win32gui.IsIconic(above):
+                cloaked = ctypes.c_int()
+                status = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+                    ctypes.c_void_p(above), 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+                if status != 0 or not cloaked.value:
+                    left, top, right, bottom = win32gui.GetWindowRect(above)
+                    if (max(left, x) < min(right, x+width) and max(top, y) < min(bottom, y+height)
+                            and not self._non_occluding_layer(above)):
+                        title = win32gui.GetWindowText(above)
+                        error = (TemporaryCaptureOverlayError
+                                 if title in ('ChatGPT is using your computer. Esc to cancel',
+                                              'Codex Computer Use Cursor Overlay')
+                                 else RuntimeError)
+                        raise error(f'其他視窗覆蓋遊戲；高速擷取安全停止：{title!r}')
+            above = win32gui.GetWindow(above, win32con.GW_HWNDPREV)
+        return x, y, width, height
+
+    def _release_buffers(self):
+        try:
+            if self.memory is not None and self.previous_bitmap is not None:
+                self.memory.SelectObject(self.previous_bitmap)
+            if self.bitmap is not None:
+                win32gui.DeleteObject(self.bitmap.GetHandle())
+            if self.memory is not None:
+                self.memory.DeleteDC()
+        finally:
+            if self.window_dc is not None:
+                win32gui.ReleaseDC(0, self.window_dc)
+            self.window_dc = self.source = self.memory = self.bitmap = None
+            self.previous_bitmap = None
+            self.size = None
+
+    def grab(self):
+        if self.closed:
+            raise RuntimeError('Capture is closed')
+        ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+        rect = self._visible_client()
+        x, y, width, height = rect
+        if self.size != (width, height):
+            self._release_buffers()
+            try:
+                self.window_dc = win32gui.GetDC(0)
+                self.source = win32ui.CreateDCFromHandle(self.window_dc)
+                self.memory = self.source.CreateCompatibleDC()
+                self.bitmap = win32ui.CreateBitmap()
+                self.bitmap.CreateCompatibleBitmap(self.source, width, height)
+                self.previous_bitmap = self.memory.SelectObject(self.bitmap)
+                self.size = width, height
+            except Exception:
+                self._release_buffers()
+                raise
+        self.memory.BitBlt((0, 0), (width, height), self.source, (x, y),
+                           win32con.SRCCOPY | 0x40000000)  # CAPTUREBLT is absent in some pywin32 builds.
+        pixels = self.bitmap.GetBitmapBits(True)
+        frame = np.frombuffer(pixels, np.uint8).reshape(height, width, 4)[:, :, :3].copy()
+        # A focus/move/overlay race invalidates the frame, including the fresh
+        # pre-input capture. Never return a cached or partially shifted frame.
+        if self._visible_client() != rect:
+            raise RuntimeError('擷取期間視窗位置或尺寸改變；已停止')
+        return frame
+
+    def close(self):
+        if not self.closed:
+            self._release_buffers()
+            self.closed = True
+
+
+class DxgiCapture:
+    """Fresh desktop-duplication frames with the same visible-client guard.
+
+    Synchronous grabs only: no buffered old frames or synthetic video mode.
+    This backend currently supports a game wholly on the primary monitor.
+    """
+    def __init__(self, hwnd, *, camera_factory=None, clock=time.perf_counter,
+                 sleeper=time.sleep, fresh_timeout=.5):
+        self.guard = ScreenCapture(hwnd)
+        self.clock, self.sleeper = clock, sleeper
+        self.fresh_timeout = fresh_timeout
+        self.capture_events = []
+        self.closed = False
+        self.camera = None
+        ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+        user = ctypes.windll.user32
+        if camera_factory is None:
+            import dxcam
+            camera_factory = dxcam.create
+        self.camera = camera_factory(output_color='BGR', backend='dxgi', max_buffer_len=2)
+        if (self.camera.width, self.camera.height) != (user.GetSystemMetrics(0), user.GetSystemMetrics(1)):
+            self.camera.release()
+            self.camera = None
+            raise RuntimeError('DXGI 輸出與主螢幕不吻合；已停止')
+
+    def grab(self):
+        if self.closed:
+            raise RuntimeError('Capture is closed')
+        ctypes.windll.user32.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
+        rect = self.guard._visible_client()
+        x, y, width, height = rect
+        if x < 0 or y < 0 or x+width > self.camera.width or y+height > self.camera.height:
+            raise RuntimeError('DXGI 遊戲已離開主螢幕；已停止')
+        wait_started = self.clock()
+        deadline = wait_started+self.fresh_timeout
+        none_count = 0
+        while True:
+            if win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000:
+                raise RuntimeError('F9 已停止 DXGI 等待；不會繼續輸入')
+            # Each call must acquire a NEW rendered frame. None never means
+            # permission to reuse a previously observed approach for input.
+            frame = self.camera.grab(region=(x, y, x+width, y+height),
+                                     copy=True, new_frame_only=True)
+            if self.guard._visible_client() != rect:
+                raise RuntimeError('擷取期間視窗位置或尺寸改變；已停止')
+            if frame is not None:
+                if frame.shape != (height, width, 3):
+                    raise RuntimeError('DXGI 畫面尺寸不吻合；已停止')
+                waited = self.clock()-wait_started
+                if waited >= .1:
+                    self.capture_events.append({'time':self.clock(), 'wait_ms':round(waited*1000,3),
+                        'none_count':none_count, 'action':'discard_fresh_frame_and_reset_tracker'})
+                    raise RecoveredFrameGap('DXGI 新畫面已恢復；丟棄跨空檔幀並重建識別狀態')
+                return frame
+            none_count += 1
+            if self.clock() >= deadline:
+                self.capture_events.append({'time':self.clock(), 'wait_ms':round((self.clock()-wait_started)*1000,3),
+                    'none_count':none_count, 'action':'stop_after_bounded_wait'})
+                raise NoFreshFrameError('DXGI 等待500ms仍未取得新畫面；安全停止，不使用舊幀')
+            self.sleeper(.001)
+
+    def close(self):
+        if not self.closed:
+            try:
+                if self.camera is not None:
+                    self.camera.release()
+            finally:
+                self.guard.close()
+                self.closed = True
+
+
+class GameCapture:
+    def __init__(self, hwnd, backend='screen'):
+        if backend not in ('screen', 'printwindow', 'dxgi'):
+            raise ValueError('Unknown capture backend')
+        self.backend = backend
+        self.impl = {'screen': ScreenCapture, 'printwindow': PrintWindowCapture,
+                     'dxgi': DxgiCapture}[backend](hwnd)
+
+    def grab(self):
+        return self.impl.grab()
+
+    def close(self):
+        getattr(self.impl, 'close', lambda: None)()
+
+
+class RoundGate:
+    """Require the live HUD on every frame; latch off after a round ends.
+
+    Conservative pixel checks are evaluated in normalized client coordinates.
+    Unknown frames never authorize input. This gate is intentionally independent
+    of the rope detector so moving menu artwork cannot authorize a click.
+    """
+
+    def __init__(self) -> None:
+        self.active = False
+        self.finished = False
+        self._confirmations = 0
+
+    @staticmethod
+    def jump_position(frame: np.ndarray):
+        """Locate the yellow arrow inside the observed Jump button region."""
+        if frame.size == 0:
+            return None
+        roi = cv2.resize(frame, (960, 540))[375:490, 750:895]
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, (20, 100, 180), (42, 255, 255))
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return None
+        contour = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(contour) < 150:
+            return None
+        m = cv2.moments(contour)
+        if not m['m00']:
+            return None
+        return ((750+m['m10']/m['m00'])/960, (375+m['m01']/m['m00'])/540)
+
+    @staticmethod
+    def player_ready(frame: np.ndarray) -> bool:
+        """Check the central player's marker, independent of costume."""
+        if frame.size == 0:
+            return False
+        roi = cv2.resize(frame, (960, 540))[95:250, 500:600]
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        region = cv2.inRange(hsv, (18, 110, 170), (42, 255, 255))
+        contours, _ = cv2.findContours(region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            x, y, width, height = cv2.boundingRect(contour)
+            if 22 <= area <= 110 and 6 <= width <= 22 and 5 <= height <= 17:
+                center_x = (500 + x + width/2) / 960
+                center_y = (95 + y + height/2) / 540
+                if .53 <= center_x <= .60 and .20 <= center_y <= .45:
+                    return True
+        return False
+
+    @staticmethod
+    def gameplay_visible(frame: np.ndarray) -> bool:
+        if frame.size == 0:
+            return False
+        normalized = cv2.resize(frame, (960, 540))
+        hearts = cv2.inRange(cv2.cvtColor(normalized[190:235, 55:155], cv2.COLOR_BGR2HSV), (35, 100, 130), (85, 255, 255))
+        button = cv2.cvtColor(normalized[375:490, 750:895], cv2.COLOR_BGR2HSV)
+        jump = cv2.inRange(button, (20, 100, 180), (42, 255, 255))
+        blue_button = cv2.inRange(button, (85, 80, 80), (125, 255, 255))
+        score = cv2.inRange(cv2.cvtColor(normalized[45:125, 35:155], cv2.COLOR_BGR2HSV), (0, 0, 210), (180, 65, 255))
+        return (np.count_nonzero(hearts) >= 70
+                and np.count_nonzero(jump) >= 250
+                and np.count_nonzero(blue_button) >= 200
+                and np.count_nonzero(score) >= 100)
+
+    def observe(self, frame: np.ndarray) -> bool:
+        if self.finished:
+            return False
+        visible = self.gameplay_visible(frame)
+        if not visible:
+            self._confirmations = 0
+            if self.active:
+                self.finished = True
+            return False
+        self._confirmations += 1
+        if self._confirmations >= 3:
+            self.active = True
+        return self.active
+
+
+class StartupScreen:
+    """Recognize only the known pre-round button/page combinations."""
+
+    BUTTONS = {
+        "next": (.842, .909),
+        "ok": (.842, .909),
+        "event_next": (.842, .909),
+        "play": (.866, .909),
+    }
+
+    @staticmethod
+    def _count(hsv: np.ndarray, roi, lower, upper) -> int:
+        x0, y0, x1, y1 = roi
+        return int(np.count_nonzero(cv2.inRange(hsv[y0:y1, x0:x1], lower, upper)))
+
+    @classmethod
+    def _button_visible(cls, hsv, name):
+        # RETR_EXTERNAL follows the pill's silhouette. Interior text holes do
+        # not enter any score, template or count used to recognize this button.
+        roi = hsv[455:525, 700:950]
+        cyan = cv2.inRange(roi, (80, 95, 100), (115, 255, 255))
+        white = cv2.inRange(roi, (0, 0, 185), (179, 85, 255))
+        contours, _ = cv2.findContours(cyan, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        expected_x, expected_y = cls.BUTTONS[name]
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            if not (140 <= w <= 220 and 32 <= h <= 58 and 3 <= w/h <= 5.5
+                    and abs(700+x+w/2-960*expected_x) <= 14
+                    and abs(455+y+h/2-540*expected_y) <= 8
+                    and cv2.contourArea(contour)/(w*h) >= .72):
+                continue
+            fill = np.zeros(cyan.shape, np.uint8)
+            cv2.drawContours(fill, [contour], -1, 255, cv2.FILLED)
+            rim = cv2.subtract(cv2.dilate(fill, np.ones((7, 7), np.uint8)), fill)
+            if np.count_nonzero(cv2.bitwise_and(white, rim)) >= 80:
+                return True
+        return False
+
+    def identify(self, frame: np.ndarray) -> str | None:
+        if frame.size == 0 or RoundGate.gameplay_visible(frame):
+            return None
+        hsv = cv2.cvtColor(cv2.resize(frame, (960, 540)), cv2.COLOR_BGR2HSV)
+        # Page artwork determines the action; no button lettering is read.
+        pink = ((155, 50, 100), (179, 255, 255))
+        card = self._count(hsv, (490, 150, 900, 410), (0, 0, 170), (179, 65, 255))
+        if self._count(hsv, (570, 145, 765, 185), *pink) > 2000:
+            name = 'next'
+        elif card > 60000 and self._count(hsv, (550, 75, 820, 140), *pink) > 800:
+            name = 'ok'
+        elif (card > 80000 and self._count(hsv, (0, 0, 500, 120),
+                                           (85, 60, 100), (115, 255, 255)) > 30000):
+            name = 'event_next'
+        elif self._count(hsv, (20, 20, 280, 150), (15, 90, 120), (45, 255, 255)) > 5000:
+            name = 'play'
+        else:
+            return None
+        return name if self._button_visible(hsv, name) else None
+
+
+class StartupNavigator:
+    """Confirm startup pages and bound missed-click retries before gameplay."""
+
+    ORDER = ("next", "ok", "event_next", "play")
+    # The selection page can be visible before Unity accepts its button input.
+    # Count actual matching captures, not elapsed time, before the one-shot click.
+    CONFIRM_FRAMES = {"next": 5, "ok": 5, "event_next": 8, "play": 8}
+    RETRY_FRAMES = 12
+
+    def __init__(self, screen: StartupScreen) -> None:
+        self.screen = screen
+        self.last_seen = None
+        self.confirmations = 0
+        self.used: set[str] = set()
+        self.retried: set[str] = set()
+        self.finished = False
+
+    def observe(self, frame: np.ndarray) -> str | None:
+        if self.finished:
+            return None
+        name = self.screen.identify(frame)
+        self.confirmations = self.confirmations + 1 if name and name == self.last_seen else 1
+        self.last_seen = name
+        if name is None:
+            return None
+        if self.used and self.ORDER.index(name) < max(self.ORDER.index(n) for n in self.used):
+            return None
+        if name in self.used:
+            # The same pre-round page can ignore an early Unity click. Retry
+            # once only when it is still visibly the same page; the controller
+            # seals this navigator as soon as gameplay is ever seen.
+            if name in self.retried or self.confirmations < self.RETRY_FRAMES:
+                return None
+        elif self.confirmations < self.CONFIRM_FRAMES[name]:
+            return None
+        return name
+
+    def mark_clicked(self, name: str) -> None:
+        if name in self.used:
+            self.retried.add(name)
+        self.used.add(name)
+        self.last_seen = None
+        self.confirmations = 0
+        # A play press can also be ignored during a Unity page transition.
+        # Seal only on observed gameplay, so its same-page retry remains
+        # bounded just like the other startup buttons.
+
+    def seal(self) -> None:
+        self.finished = True

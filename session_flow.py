@@ -3,7 +3,7 @@ import time
 import win32api
 import win32con
 import win32gui
-from vision import GameCapture, RoundGate, StartupScreen, NoFreshFrameError
+from vision import GameCapture, RoundGate, StartupScreen, NoFreshFrameError, RecoveredFrameGap
 
 
 def wait_for_result_page(hwnd, *, timeout=15., clock=time.perf_counter,
@@ -15,12 +15,11 @@ def wait_for_result_page(hwnd, *, timeout=15., clock=time.perf_counter,
     confirmations = 0
     try:
         while clock() < deadline:
-            if (stop_requested() or win32gui.GetForegroundWindow() != hwnd
-                    or win32api.GetAsyncKeyState(win32con.VK_F9) & 0x8000):
+            if (stop_requested() or win32gui.GetForegroundWindow() != hwnd):
                 return False
             try:
                 frame = capture.grab()
-            except NoFreshFrameError:
+            except (NoFreshFrameError, RecoveredFrameGap):
                 continue
             if not RoundGate.gameplay_visible(frame) and screen.identify(frame) == 'next':
                 confirmations += 1

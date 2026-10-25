@@ -1,0 +1,15 @@
+{
+  "source_sha256": "2c9fab45a80a8166a210b1d5adcb5fc2c42b6253b73a704e07d9b5ac7c9ca0f1",
+  "target_sha256": "321d1e84c2123a35d66db3f93fd7776cd7c1db58e6898c35e65865eceacafbe1",
+  "unchanged_initializers": 204,
+  "all_initializer_bytes_equal": true,
+  "replaced_nodes": [
+    "/model.23/Mod"
+  ],
+  "integer_input_bound": [
+    0,
+    16799
+  ],
+  "divisor": 2,
+  "retrained": false
+}

@@ -99,6 +99,43 @@ def test_start_resets_count_and_running_start_does_not_duplicate_session(root):
         dispose(root, app)
 
 
+@pytest.mark.parametrize('dpi',[96,120,144,192])
+def test_score_limit_matches_fishing_spacing_and_field_height(dpi,root):
+    with patch('main_ui.window_dpi',return_value=dpi),patch('main_ui.window_work_area',return_value=(3840,2160)):
+        app=main_ui.JumpRopeApp(root)
+    try:
+        root.update()
+        assert app.score_mode.get()=='unlimited' and app.score_entry.instate(['disabled'])
+        assert app.score_custom.cget('text')==''
+        assert app.score_custom.winfo_rootx()-(app.score_unlimited.winfo_rootx()+app.score_unlimited.winfo_width())==app.px(10)
+        assert app.field_frames['score'].winfo_rootx()==app.score_custom.winfo_rootx()+app.score_custom.winfo_width()
+        assert app.field_frames['score'].winfo_height()==app.field_frames['target'].winfo_height()
+        assert tuple(map(int,app.score_label.grid_info()['padx']))==(0,app.px(18))
+        app.score_custom.invoke();assert not app.score_entry.instate(['disabled'])
+        app.score_amount.set('150');app.score_unlimited.invoke();app.score_custom.invoke()
+        assert app.score_amount.get()=='150'
+        app.set_controls(True)
+        assert all(w.instate(['disabled']) for w in [app.score_custom,app.score_unlimited,app.score_entry])
+        app.set_controls(False);assert not app.score_entry.instate(['disabled'])
+    finally:dispose(root,app)
+
+
+def test_score_limit_is_frozen_in_session_and_status_is_yellow(root):
+    factory=Mock(side_effect=lambda config,**kw:SimpleNamespace(config=config,completed_rounds=0,
+        inputs=0,stop_reason='round_finished',directory=None,run=Mock(),stop=Mock()))
+    app=main_ui.JumpRopeApp(root,session_factory=factory)
+    try:
+        app.score_custom.invoke();app.score_amount.set('150')
+        with patch('main_ui.threading.Thread') as thread:
+            thread.return_value.is_alive.return_value=False;app.start()
+            assert factory.call_args.args[0].score_limit==150
+            app.messages.put(('score_limit',150));app.poll()
+            assert '150' in app.status.cget('text') and str(app.status.cget('foreground'))==app.STATUS_COLOR
+            app.set_controls(False);app.score_unlimited.invoke();app.start()
+            assert factory.call_args.args[0].score_limit is None
+    finally:dispose(root,app)
+
+
 def test_shortcut_capture_requires_click_and_locks_while_running(root):
     root.withdraw()
     app = main_ui.JumpRopeApp(root)
@@ -189,8 +226,14 @@ def test_minimum_window_keeps_translated_log_visible(dpi,root):
             app.apply_language()
             root.update()
             assert app.log.winfo_height() >= app.px(30)
+            app._reveal_widget(app.logs)
+            root.update()
             assert app.logs.winfo_rooty()+app.logs.winfo_height() <= root.winfo_rooty()+root.winfo_height()
+            # A short screen can scroll to the footer rather than clip it.
+            app._reveal_widget(app.version_label)
+            root.update()
             assert app.version_label.winfo_rooty()+app.version_label.winfo_height() <= root.winfo_rooty()+root.winfo_height()
+            app.page_canvas.yview_moveto(0)
             assert app.shortcut_entry.cget('readonlybackground') == '#FFFFFF'
     finally:
         dispose(root,app)
@@ -230,13 +273,55 @@ def test_help_is_centered_on_parent_and_reused(root):
 def test_version_is_in_footer_and_not_window_title(root):
     app = main_ui.JumpRopeApp(root)
     try:
-        assert app.version_label.cget('text') == 'v1.2.1'
-        assert '1.2.1' not in root.title()
+        assert app.version_label.cget('text') == 'v1.3.0'
+        assert '1.3.0' not in root.title()
         assert app.status.cget('text') == '等待開始'
         assert app.counter.cget('text') == '已完成：0 / 1 局'
         assert not hasattr(app,'round_hint') and not hasattr(app,'log_title')
     finally:
         dispose(root,app)
+
+@pytest.mark.parametrize('dpi',[96,120,144,192])
+def test_default_client_pixels_scale_from_120_dpi(dpi,root):
+    root.maxsize(6000,4000)
+    with patch('main_ui.window_dpi',return_value=dpi),patch('main_ui.window_work_area',return_value=(6000,4000)):
+        app=main_ui.JumpRopeApp(root)
+    try:
+        root.update()
+        assert root.winfo_width()==round(517*dpi/120)
+        assert root.winfo_height()==round(1055*dpi/120)
+        root.geometry(f'{round(600*dpi/120)}x{round(1100*dpi/120)}');root.update()
+        assert root.winfo_width()==round(600*dpi/120)
+    finally:dispose(root,app)
+
+def test_short_work_area_caps_height_and_keeps_footer_reachable(root):
+    with patch('main_ui.window_dpi',return_value=120),patch('main_ui.window_work_area',return_value=(1280,720)):
+        app=main_ui.JumpRopeApp(root)
+    try:
+        root.update();assert root.winfo_height()<=720-app.px(40)
+        assert app.page_scroll.winfo_ismapped()
+        app.page_canvas.yview_moveto(1);root.update()
+        assert app.version_label.winfo_rooty()+app.version_label.winfo_height()<=root.winfo_rooty()+root.winfo_height()
+        app.page_canvas.yview_moveto(0);root.update()
+        app._reveal_widget(app.version_label);root.update()
+        assert app.version_label.winfo_rooty()+app.version_label.winfo_height()<=root.winfo_rooty()+root.winfo_height()
+    finally:dispose(root,app)
+
+def test_version_link_preserves_style_and_supports_mouse_and_keyboard(root):
+    app=main_ui.JumpRopeApp(root)
+    try:
+        root.update()
+        assert app.version_label.cget('style')=='Muted.TLabel'
+        assert str(app.version_label.cget('cursor'))=='hand2'
+        assert app.version_label.cget('takefocus')
+        with patch('main_ui.webbrowser.open') as browser:
+            app.version_label.event_generate('<Button-1>');root.update()
+            app.version_label.focus_force();root.update()
+            app.version_label.event_generate('<Return>');root.update()
+            app.version_label.event_generate('<space>');root.update()
+            assert browser.call_count==3
+            assert all(c.args==(main_ui.PROJECT_URL,) for c in browser.call_args_list)
+    finally:dispose(root,app)
 
 
 def test_timing_slider_defaults_to_centre_and_freezes_for_a_session(root):
@@ -267,7 +352,7 @@ def test_timing_slider_defaults_to_centre_and_freezes_for_a_session(root):
         assert app.timing_choice.winfo_rootx() == app.field_frames['target'].winfo_rootx()
         assert app.timing_choice.winfo_width() == app.field_frames['target'].winfo_width()
         app.timing.set(.25)
-        assert app.timing_value.cget('text') == '提早 1.00'
+        assert app.timing_value.cget('text') == '提早 20.0 ms'
         app.start()
         app.worker.join(1)
         assert factory.call_args.args[0].timing_position == .25

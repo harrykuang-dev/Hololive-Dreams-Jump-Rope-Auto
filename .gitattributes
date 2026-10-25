@@ -1,0 +1,20 @@
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.cmd text eol=crlf
+*.onnx binary
+*.pt binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.npz binary
+LICENSE text eol=lf
+annotations/LICENSE text eol=lf
+# Preserve canonical label/resource bytes for published SHA256 verification.
+annotations/labels/** -text
+models/control.json -text
+models/directml-graph.json -text
+# Keep historical source bytes and its recorded checksums unchanged.
+archive/v1.2.1/** -text

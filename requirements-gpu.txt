@@ -1,0 +1,3 @@
+-r requirements.txt
+tensorrt-cu12==10.13.3.9.post1
+nvidia-cuda-runtime-cu12==12.9.79

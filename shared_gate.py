@@ -61,3 +61,24 @@ class SharedRoundGate(RoundGate):
         m=cv2.moments(contour)
         if not m['m00']:return None
         return ((750+m['m10']/m['m00'])/960,(375+m['m01']/m['m00'])/540)
+
+
+class EventRoundGate(SharedRoundGate):
+    """Same immutable-frame cache as the tested full-frame controller."""
+    _checked_frame=None
+    _answers={}
+    @classmethod
+    def reset_cache(cls):
+        super().reset_cache();cls._checked_frame=None;cls._answers={}
+    @classmethod
+    def _get(cls,frame,key,function):
+        if frame is not cls._checked_frame:
+            cls._checked_frame=frame;cls._answers={}
+        if key not in cls._answers:cls._answers[key]=function(frame)
+        return cls._answers[key]
+    @classmethod
+    def gameplay_visible(cls,frame):return cls._get(frame,'hud',super().gameplay_visible)
+    @classmethod
+    def jump_position(cls,frame):return cls._get(frame,'button',super().jump_position)
+    @classmethod
+    def player_ready(cls,frame):raise AssertionError('Player readiness belongs to the model/actor state')
