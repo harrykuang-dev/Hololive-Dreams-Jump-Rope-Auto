@@ -6,7 +6,7 @@ Windows 版『hololive Dreams』の自動なわとびプログラムです。ゲ
 
 ## ダウンロード
 
-[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) から **1.3.0** の Windows x64 完全版 `.7z` パッケージをダウンロードして展開してください。TensorRT 10.13 と DirectML を同梱し、対応する NVIDIA 環境では TensorRT FP16、それ以外の対応 GPU では DirectML を自動的に使用します。
+[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) から **1.3.1** の Windows x64 完全版 `.7z` パッケージをダウンロードして展開してください。TensorRT 10.13 と DirectML を同梱し、対応する NVIDIA 環境では TensorRT FP16、それ以外の対応 GPU では DirectML を自動的に使用します。
 
 EXE、`_internal/`、`accelerators/` を同じ場所に保持してください。実行時に PyTorch は使用しません。TensorRT の初回起動時は、ゲーム操作を始める前にローカル GPU 用のエンジンを構築してキャッシュするため、数分かかる場合があります。
 
@@ -29,7 +29,7 @@ EXE、`_internal/`、`accelerators/` を同じ場所に保持してください�
 2. EXE を実行し、「言語/Language」で表示言語を選びます。
 3. 目標回数を 1–999 回に設定します。初期値は 1 回です。ショートカットを変更する場合は設定欄をクリックして希望のキーを押します。
 4. 開始ボタンまたは開始ショートカットを押します。プログラムはゲームを前面に切り替えようとします。ゲーム全体をメインモニター内に表示し、ほかのウィンドウで隠さないでください。暗い色で短髪、装飾やアクセサリーの少ないキャラクターがおすすめです。例：**儒烏風亭らでん（デフォルト衣装）**とピクセルサングラス（pixel sunglasses）。
-5. 停止ショートカット、停止ボタン、または別のウィンドウへの切り替えで停止します。
+5. 停止ショートカットまたは停止ボタンで停止します。ゲームが非アクティブになると、1回の実行につき最大3回まで前面への復帰を試みます。別のプログラムへ切り替える前に停止してください。
 
 ## 動作条件と制限
 
@@ -64,6 +64,8 @@ Windows 10／11 x64 と Windows 版ゲームが必要です。ゲームのクラ
 ```text
 %LOCALAPPDATA%\HololiveJumpRopeAuto\sessions\
 ```
+
+画像取得前の初期化に失敗した場合も、実行全体の `session-diagnostics.zip` を保存します。開発者モードでは、フォーカスを奪ったウィンドウ名、プロセス名、復帰の経過も記録します。
 
 実行ごとに日時付きフォルダーを作り、各回終了後に `round-番号` 内へ `diagnostics.zip` を生成します。報告にはアプリのバージョン、ゲーム言語／キャラクター、解像度、Windows の表示倍率、症状と該当回の ZIP を添えてください。
 

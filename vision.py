@@ -19,6 +19,10 @@ class TemporaryCaptureOverlayError(RuntimeError):
     """Computer Use's transient launch indicators still obstruct the client."""
 
 
+class FocusLostError(RuntimeError):
+    """The current frame is invalid; recover focus before a fresh capture."""
+
+
 class NoFreshFrameError(RuntimeError):
     """No new desktop frame; never authorizes reusing captured pixels."""
 
@@ -106,9 +110,10 @@ class ScreenCapture:
             return False
 
     def _visible_client(self):
-        if (not win32gui.IsWindow(self.hwnd) or win32gui.IsIconic(self.hwnd)
-                or win32gui.GetForegroundWindow() != self.hwnd):
-            raise RuntimeError('高速擷取需要遊戲在前景且未最小化；已停止')
+        if not win32gui.IsWindow(self.hwnd):
+            raise RuntimeError('遊戲視窗已關閉')
+        if (win32gui.IsIconic(self.hwnd) or win32gui.GetForegroundWindow() != self.hwnd):
+            raise FocusLostError('高速擷取需要遊戲在前景且未最小化')
         _, _, width, height = win32gui.GetClientRect(self.hwnd)
         x, y = win32gui.ClientToScreen(self.hwnd, (0, 0))
         user = ctypes.windll.user32

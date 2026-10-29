@@ -50,7 +50,8 @@ class BotConfig:
             raise ValueError('Diagnostics disabled requires record_path=None')
 
 class WindowController:
-    def __init__(self, config=None, *, clock=time.perf_counter, sleeper=time.sleep, stop_requested=None):
+    def __init__(self, config=None, *, clock=time.perf_counter, sleeper=time.sleep, stop_requested=None,
+                 focus_recovery=None):
         self.config=config or BotConfig();self.config.validate()
         self._clock,self._sleep=clock,sleeper
         self._stop=threading.Event();self._external_stop=stop_requested or (lambda:False)
@@ -60,6 +61,24 @@ class WindowController:
         self.input_times=[];self.menu_actions=[];self.input_pulses=[]
         self.recording_performance=self.diagnostic_recorder=None;self.basic_performance={}
         self._mouse_down=False;self.gate_type=RoundGate
+        from focus_recovery import FocusRecovery
+        self.focus_recovery=focus_recovery or FocusRecovery(diagnostics=self.config.diagnostics_enabled,
+                                                           clock=clock,sleeper=sleeper)
+        self._capture_restart=False
+
+    def ensure_foreground(self):
+        before=self.focus_recovery.successes
+        def release():
+            reset=getattr(self,'reset_evidence',None)
+            if reset:reset('focus_lost')
+            if self._mouse_down:
+                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP,0,0)
+                self._mouse_down=False
+        ready=self.focus_recovery.ensure(self._hwnd,stopped=self._stopped,release=release)
+        if self.focus_recovery.successes!=before:
+            self._capture_restart=True
+            self.gate_type.reset_cache()
+        return ready
 
     @property
     def running(self) -> bool:
@@ -85,6 +104,15 @@ class WindowController:
 
     def focus_game(self) -> int | None:
             hwnd = self.find_game()
+            if self.focus_recovery.initial_focus_done:
+                self._hwnd=hwnd
+                if self.ensure_foreground():return hwnd
+                self.stop_reason='stopped' if self._stopped() else 'focus_lost'
+                return None
+            if self.focus_recovery.diagnostics:
+                from focus_recovery import window_snapshot
+                self.focus_recovery.note('initial_focus_begin',target=window_snapshot(hwnd),
+                    foreground=window_snapshot(win32gui.GetForegroundWindow()))
             if win32gui.IsIconic(hwnd):
                 LOG.info('正在還原遊戲視窗')
                 # Never synchronously message a minimized Unity window or join its
@@ -112,6 +140,8 @@ class WindowController:
                         stable_since = self._clock() if stable_since is None else stable_since
                         if self._clock()-stable_since >= .15:
                             self._hwnd = hwnd
+                            self.focus_recovery.initial_focus_done=True
+                            self.focus_recovery.note('initial_focus_ready',target_hwnd=hwnd)
                             return hwnd
                     else:
                         stable_since = None
@@ -149,8 +179,8 @@ class WindowController:
             if self._stopped():
                 self.stop_reason = 'stopped'
                 return False
-            if win32gui.GetForegroundWindow() != self._hwnd:
-                self.stop_reason = 'focus_lost'
+            if not self.ensure_foreground():
+                self.stop_reason = 'stopped' if self._stopped() else 'focus_lost'
                 return False
             return True
 

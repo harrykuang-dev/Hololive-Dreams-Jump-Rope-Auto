@@ -5,7 +5,7 @@ import ctypes,logging,threading,time
 import cv2
 import win32api,win32con,win32gui
 from window_control import BotConfig,WindowController,GameNotFoundError
-from vision import GameCapture,StartupScreen,StartupNavigator,NoFreshFrameError,RecoveredFrameGap
+from vision import GameCapture,StartupScreen,StartupNavigator,NoFreshFrameError,RecoveredFrameGap,FocusLostError
 from shared_gate import EventRoundGate
 from timing_control import control_config
 from controller.policy import ArcCarryPolicy
@@ -86,7 +86,9 @@ class JumpRopeBot(WindowController):
                     self.config.timing_position,backend=self.detector.backend))
             if self._stopped():return
             self.gate_type.reset_cache();gate=self.gate_type();screen=StartupScreen();navigator=StartupNavigator(screen)
+            self.focus_recovery.note('capture_initialization_begin',target_hwnd=self._hwnd)
             capture=GameCapture(self._hwnd,backend=self.config.capture_backend,stop_requested=self._stopped)
+            self.focus_recovery.note('capture_initialization_ready',target_hwnd=self._hwnd)
             self.pulse=self.pulse_factory(lambda c:self._native('down',c),lambda c,r:self._native('up',c,r))
             score_guard=None
             if self.config.score_limit is not None:
@@ -96,8 +98,19 @@ class JumpRopeBot(WindowController):
             while not self._stopped():
                 iteration=time.perf_counter_ns()
                 if recorder:recorder.check_health()
-                if win32gui.GetForegroundWindow()!=self._hwnd:self.stop_reason='focus_lost';break
+                if not self.ensure_foreground():
+                    self.stop_reason='stopped' if self._stopped() else 'focus_lost';break
+                if self._capture_restart:
+                    capture.close()
+                    capture=GameCapture(self._hwnd,backend=self.config.capture_backend,stop_requested=self._stopped)
+                    self._capture_restart=False
+                    self.focus_recovery.note('capture_reinitialized_after_focus')
+                    continue
                 try:frame=capture.grab()
+                except FocusLostError:
+                    if not self.ensure_foreground():
+                        self.stop_reason='stopped' if self._stopped() else 'focus_lost';break
+                    continue
                 except RecoveredFrameGap:self.reset_evidence('capture_recovered');continue
                 except NoFreshFrameError:
                     self.reset_evidence('no_fresh_frame')
@@ -105,6 +118,8 @@ class JumpRopeBot(WindowController):
                     if (time.perf_counter_ns()-began)/1e9>self.config.startup_timeout:self.stop_reason='startup_timeout';break
                     continue
                 stamp=time.perf_counter_ns();self.frame_id+=1
+                if self.frame_id==1:self.focus_recovery.note('first_frame',capture_ns=stamp,
+                                                           source_size=list(frame.shape[1::-1]))
                 if self._stopped():break
                 if self.config.diagnostics_enabled and self.config.record_path and recorder is None:
                     from diagnostics import RoundDiagnostics
@@ -122,7 +137,9 @@ class JumpRopeBot(WindowController):
                     if self.round_started_at is None and not navigator.finished:
                         action=navigator.observe(frame)
                         if action:
-                            fresh=capture.grab();self.frame_id+=1
+                            try:fresh=capture.grab()
+                            except FocusLostError:continue
+                            self.frame_id+=1
                             if screen.identify(fresh)==action and self.tap_startup(action,fresh,screen):navigator.mark_clicked(action)
                     if (time.perf_counter_ns()-began)/1e9>self.config.startup_timeout:self.stop_reason='startup_timeout';break
                     self._sleep(.02);continue

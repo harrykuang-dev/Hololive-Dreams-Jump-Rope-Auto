@@ -6,7 +6,7 @@ Program lompat tali untuk *hololive Dreams* versi Windows. Program mengenali pos
 
 ## Unduh
 
-Unduh **1.3.0** dari [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) dan ekstrak paket lengkap Windows x64 `.7z`. Paket menyertakan TensorRT 10.13 dan DirectML. Sistem NVIDIA yang kompatibel otomatis memakai TensorRT FP16; GPU lain yang didukung memakai DirectML.
+Unduh **1.3.1** dari [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) dan ekstrak paket lengkap Windows x64 `.7z`. Paket menyertakan TensorRT 10.13 dan DirectML. Sistem NVIDIA yang kompatibel otomatis memakai TensorRT FP16; GPU lain yang didukung memakai DirectML.
 
 Simpan EXE, `_internal/`, dan `accelerators/` dalam folder yang sama. Program tidak menggunakan PyTorch saat dijalankan. Saat TensorRT pertama kali dimulai, program membangun dan menyimpan cache engine untuk GPU lokal sebelum mengoperasikan game; proses ini dapat memerlukan beberapa menit.
 
@@ -29,7 +29,7 @@ Kode sumber sebelumnya dan Lisensi MIT disimpan di [archive/v1.2.1](archive/v1.2
 2. Jalankan EXE dan pilih bahasa program pada Bahasa/Language.
 3. Atur target 1–999 ronde; nilai bawaan adalah 1. Untuk mengganti pintasan, klik kolomnya lalu tekan tombol yang diinginkan.
 4. Klik Mulai atau tekan pintasan mulai. Program mencoba membawa game ke depan. Pastikan seluruh game terlihat tanpa halangan pada monitor utama. Pilih karakter berwarna gelap, berambut pendek, dengan sedikit hiasan dan aksesori, misalnya **Juufuutei Raden (kostum bawaan)** dengan pixel sunglasses.
-5. Tekan pintasan berhenti, klik Berhenti, atau pindah jendela untuk menghentikan program.
+5. Tekan pintasan berhenti atau klik Berhenti. Jika game kehilangan fokus, program mencoba mengembalikannya ke depan, maksimal tiga kali per rangkaian ronde. Hentikan program sebelum beralih ke program lain.
 
 ## Persyaratan dan batasan
 
@@ -64,6 +64,8 @@ Klik `?` untuk melihat dan membuka folder diagnostik:
 ```text
 %LOCALAPPDATA%\HololiveJumpRopeAuto\sessions\
 ```
+
+`session-diagnostics.zip` untuk seluruh proses juga disimpan jika inisialisasi gagal sebelum gambar ditangkap. Mode pengembang mencatat judul jendela, nama proses yang mengambil fokus, dan proses pemulihan.
 
 Setiap proses membuat folder dengan nama waktu. Setelah setiap ronde selesai, `diagnostics.zip` dibuat dalam folder `round-nomor`. Sertakan versi program, bahasa／karakter game, resolusi, skala tampilan Windows, deskripsi masalah, dan ZIP ronde bermasalah dalam laporan.
 

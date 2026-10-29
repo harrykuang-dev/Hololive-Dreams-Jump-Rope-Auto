@@ -8,7 +8,7 @@ YOLO26n Detect, two classes: whole visible rope (0) and player marker (1). Input
 
 The model is derived from Ultralytics YOLO26 and carries [AGPL-3.0](AGPL-3.0.txt). The current integrated program is also AGPL-3.0; the historical archive retains its MIT License. See [NOTICE.md](../NOTICE.md).
 
-Training used 400 real annotated training images plus 100 synthetic training images; 100 separate real images were used for development validation. The [public annotation package](../annotations/README.md) contains the human annotation records and gameplay screenshots, with separate rights notices. Extracted rendering resources and synthetic renders are not distributed. Runtime uses only the trained graph, numeric temporal references and pixels from the game window.
+Training used 500 real annotated training images plus 100 synthetic training images; 125 separate real images were used for development validation. The update adds 100 late-game training images and 25 development-validation images, separated by whole recorded game. The public annotation package remains the previously published set; the additional 125 late-game annotations are not included in it. The [public annotation package](../annotations/README.md) contains the human annotation records and gameplay screenshots, with separate rights notices. Extracted rendering resources and synthetic renders are not distributed. Runtime uses only the trained graph, numeric temporal references and pixels from the game window.
 
 `rope.pt` is the trained source checkpoint. [Training and export tools](../training/README.md) and the original recipe are included.
 

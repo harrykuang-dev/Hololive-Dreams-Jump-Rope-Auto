@@ -1,6 +1,6 @@
 # 開發說明
 
-目前版本為 1.3.0。程式、控制器及 YOLO 衍生權重採用 AGPL-3.0；舊版完整來源及 MIT 授權位於 `archive/v1.2.1/`。`archive/snapshot.json` 記錄原提交與檔案 SHA-256，建置排除存檔。人工標註與訓練工具分別在 `annotations/` 和 `training/`，兩者不進入執行包。
+目前版本為 1.3.1。程式、控制器及 YOLO 衍生權重採用 AGPL-3.0；舊版完整來源及 MIT 授權位於 `archive/v1.2.1/`。`archive/snapshot.json` 記錄原提交與檔案 SHA-256，建置排除存檔。人工標註與訓練工具分別在 `annotations/` 和 `training/`，兩者不進入執行包。
 
 ## 啟動
 
@@ -23,7 +23,7 @@ python main_ui.py --check-only --report model-check.json
 python main_ui.py --check-only --directml --report directml-model-check.json
 python tools/build_release.py
 # Optional: build a portable NVIDIA component from the installed GPU packages.
-python tools/build_tensorrt_component.py dist/HololiveDreamsJumpRopeAuto-1.3.0/accelerators/tensorrt
+python tools/build_tensorrt_component.py dist/HololiveDreamsJumpRopeAuto-1.3.1/accelerators/tensorrt
 ```
 
 `--check-only`只載入並暖機模型，不建立視窗、不擷取、不輸入。GUI測試使用假會話；控制迴圈測試使用合成畫面與假的OS輸入。
@@ -42,7 +42,7 @@ python tools/build_tensorrt_component.py dist/HololiveDreamsJumpRopeAuto-1.3.0/a
 
 DirectML會話建立時暫時隔離CUDA_VISIBLE_DEVICES並在finally恢復，避免本機NVIDIA在CUDA=-1遮罩下原生崩潰；不改系統環境，亦不影響TensorRT的CUDA可用性判定。
 
-`controller/`處理多形態相位、真實時間差、速度、主角落地和有限遮擋預約。`timing_control.py`只偏移掃地和圓周lead，其他門檻及25ms按壓保持。`jump_rope_bot.py`負責單一擷取、來源畫面編號與操作狀態檢查；`input_pulse.py`及`input_timer.py`負責可中斷放開，按住時繼續觀察。`window_control.py`處理還原最小化、前景等待及選單；`vision.py`包含上一版透明NVIDIA覆蓋層相容性修正。
+`controller/`處理多形態相位、真實時間差、速度、主角落地和有限遮擋預約。`timing_control.py`只偏移掃地和圓周lead，其他門檻及25ms按壓保持。`jump_rope_bot.py`負責單一擷取、來源畫面編號與操作狀態檢查；`input_pulse.py`及`input_timer.py`負責可中斷放開，按住時繼續觀察。`window_control.py`處理還原最小化、前景等待及選單；`focus_recovery.py`在每批執行期間最多嘗試切回三次，恢復前放開輸入、清除過時預測並重建擷取，開發者模式另記錄失焦視窗與程序及恢復事件；`vision.py`包含上一版透明NVIDIA覆蓋層相容性修正。
 
 ## 診斷與打包
 

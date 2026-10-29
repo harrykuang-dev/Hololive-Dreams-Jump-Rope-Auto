@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import threading
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ from session_flow import wait_for_result_page
 from vision import GameCapture
 from timing_control import DEFAULT_TIMING_POSITION, offset_ms, validate_timing_position
 
-APP_VERSION = '1.3.0'
+APP_VERSION = '1.3.1'
 LOG = logging.getLogger('jump-rope-auto')
 
 
@@ -64,6 +65,30 @@ class BatchSession:
         self.current_round = self.completed_rounds = self.completed_inputs = 0
         self.stop_reason = 'not_started'
         self.directory = None
+        from focus_recovery import FocusRecovery
+        self.focus_recovery=FocusRecovery(diagnostics=config.diagnostics,sink=self._focus_event)
+
+    def _focus_event(self,event):
+        if self.directory:
+            with (self.directory/'focus-events.jsonl').open('a',encoding='utf-8') as stream:
+                stream.write(json.dumps(event,ensure_ascii=False)+'\n')
+
+    def _session_package(self):
+        """Always available, including zero-frame initialization/focus failures."""
+        if not self.directory:return
+        payload={'limit':3,'attempts':self.focus_recovery.attempts,
+                 'successes':self.focus_recovery.successes,'events':self.focus_recovery.events}
+        (self.directory/'focus.json').write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
+        archive=self.directory/'session-diagnostics.zip'
+        temporary=archive.with_suffix('.zip.tmp')
+        with zipfile.ZipFile(temporary,'w',compression=zipfile.ZIP_DEFLATED) as output:
+            for path in sorted(self.directory.iterdir()):
+                if path.is_file() and path.suffix in ('.json','.jsonl','.log'):
+                    output.write(path,path.name)
+        with zipfile.ZipFile(temporary) as output:
+            if output.testzip() is not None:raise RuntimeError('Session diagnostic ZIP verification failed')
+        temporary.replace(archive)
+        self.notify('archive',str(archive))
 
     @property
     def inputs(self):
@@ -107,11 +132,14 @@ class BatchSession:
                 handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
                 LOG.addHandler(handler)
                 self.notify('diagnostics', str(self.directory))
+            self.focus_recovery.note('session_started')
             detector = None
             if self._bot_factory is JumpRopeBot:
                 from detector import FullFrameDetector
                 LOG.info('正在準備辨識模型')
+                self.focus_recovery.note('model_initialization_begin')
                 detector = FullFrameDetector(stopped=self._stopped)
+                self.focus_recovery.note('model_initialization_ready',backend=detector.backend)
                 if self.directory:
                     manifest['inference_backend'] = detector.backend
                     manifest['backend_fallback_reason'] = detector.fallback_reason
@@ -140,7 +168,8 @@ class BatchSession:
                     score_limit=self.config.score_limit,
                     round_timeout=900,
                     result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped,
-                    **({'detector':detector,'score_notify':lambda score:self.notify('score_limit',score)} if detector is not None else {}))
+                    **({'detector':detector,'score_notify':lambda score:self.notify('score_limit',score),
+                        'focus_recovery':self.focus_recovery} if detector is not None else {}))
                 with self._count_lock:
                     self.current_bot = bot
                 try:
@@ -163,6 +192,9 @@ class BatchSession:
                             handler.flush()
                             (recorder.directory / 'session.log').write_bytes((self.directory / 'session.log').read_bytes()[-1024*1024:])
                             (recorder.directory / 'session.json').write_bytes((self.directory / 'session.json').read_bytes())
+                            (recorder.directory/'focus.json').write_text(json.dumps({
+                                'attempts':self.focus_recovery.attempts,'limit':3,
+                                'events':self.focus_recovery.events},ensure_ascii=False,indent=2),encoding='utf-8')
                         archive = recorder.package({
                             'performance': getattr(bot, 'basic_performance', {}),
                             'input_pulses': getattr(bot, 'input_pulses', []),
@@ -176,8 +208,10 @@ class BatchSession:
                         self.stop_reason = 'stopped'
                     break
                 if not self._result_wait(bot._hwnd, stop_requested=self._stopped,
+                        ensure_foreground=lambda:self.focus_recovery.ensure(bot._hwnd,stopped=self._stopped),
                         capture_factory=lambda hwnd: GameCapture(hwnd, backend='dxgi')):
-                    self.stop_reason = 'result_not_confirmed'
+                    self.stop_reason = ('stopped' if self._stopped() else
+                                        'focus_lost' if self.focus_recovery.attempts>=3 else 'result_not_confirmed')
                     break
             self.notify('finished', self.stop_reason)
         except InterruptedError:
@@ -185,6 +219,7 @@ class BatchSession:
             self.notify('finished', self.stop_reason)
         except Exception:
             self.stop_reason = 'error'
+            LOG.exception('執行已停止')
             raise
         finally:
             try:
@@ -194,9 +229,18 @@ class BatchSession:
                         'completed_rounds': self.completed_rounds,
                         'round_limit': self.config.rounds, 'inputs': self.inputs,
                         'stop_reason': self.stop_reason,
+                        'focus_recovery_attempts':self.focus_recovery.attempts,
+                        'focus_recovery_limit':3,
                     }, indent=2), encoding='utf-8')
             finally:
-                if handler:
-                    LOG.removeHandler(handler)
-                    handler.close()
-                win32api.CloseHandle(mutex)
+                try:
+                    self.focus_recovery.note('session_finished',stop_reason=self.stop_reason)
+                    if handler:handler.flush()
+                    self._session_package()
+                except Exception:
+                    LOG.exception('診斷ZIP建立失敗；原始執行資料保留')
+                finally:
+                    if handler:
+                        LOG.removeHandler(handler)
+                        handler.close()
+                    win32api.CloseHandle(mutex)

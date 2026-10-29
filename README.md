@@ -6,7 +6,7 @@ A jump-rope program for the Windows version of *hololive Dreams*. It tracks the 
 
 ## Download
 
-Download **1.3.0** from [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) and extract the complete Windows x64 `.7z` package. It includes TensorRT 10.13 and DirectML. Compatible NVIDIA systems automatically use TensorRT FP16; other supported GPUs use DirectML.
+Download **1.3.1** from [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) and extract the complete Windows x64 `.7z` package. It includes TensorRT 10.13 and DirectML. Compatible NVIDIA systems automatically use TensorRT FP16; other supported GPUs use DirectML.
 
 Keep the EXE, `_internal/`, and `accelerators/` together. The player runtime does not use PyTorch. On the first TensorRT start, the program builds and caches an engine for the local GPU before gameplay; this can take several minutes.
 
@@ -29,7 +29,7 @@ The previous source and MIT License are preserved in [archive/v1.2.1](archive/v1
 2. Run the EXE and choose a program language under Language.
 3. Set a target of 1–999 rounds; the default is 1. Change shortcuts by clicking their fields and pressing the desired keys.
 4. Click Start or press the start shortcut. The program attempts to bring the game to the foreground. Keep the game fully visible and unobstructed on the primary monitor. Choose dark-colored, short-haired characters with few decorations and accessories, for example **Juufuutei Raden (default outfit)** with pixel sunglasses.
-5. Press the stop shortcut, click Stop, or switch windows to stop.
+5. Press the stop shortcut or click Stop to stop. If focus is lost, the program attempts to bring the game back, with at most three recovery attempts per batch. To switch to another program, stop first.
 
 ## Requirements and limitations
 
@@ -65,7 +65,7 @@ Click `?` to view and open the diagnostics folder:
 %LOCALAPPDATA%\HololiveJumpRopeAuto\sessions\
 ```
 
-Each run creates a timestamped folder. Each completed round produces `diagnostics.zip` in its `round-XX` folder. Include the application version, game language/character, resolution, Windows display scaling, problem description, and the affected round's ZIP in your report.
+Each run creates a timestamped folder. A session-level `session-diagnostics.zip` is also saved when initialization fails before any frame is captured. Focus-loss window titles, process names and recovery events are recorded when Developer mode is enabled. Each completed round produces `diagnostics.zip` in its `round-XX` folder. Include the application version, game language/character, resolution, Windows display scaling, problem description, and the affected round's ZIP in your report.
 
 ## Source and license
 

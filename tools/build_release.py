@@ -4,6 +4,7 @@ import argparse,subprocess,sys
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--distpath',default='dist')
+    parser.add_argument('--name',default='HololiveDreamsJumpRopeAuto-1.3.1')
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     # Optional TensorRT imports stdlib modules dynamically. Keep the interpreter
@@ -18,7 +19,7 @@ def main():
         if file.suffix in ('.onnx','.json','.txt') and file.name!='engine-device.json':
             models.extend(['--add-data',str(file)+';models'])
     subprocess.run([sys.executable,'-m','PyInstaller','--noconfirm','--clean','--onedir','--windowed',
-        '--distpath',args.distpath,'--name','HololiveDreamsJumpRopeAuto-1.3.0','--hidden-import','win32timezone',
+        '--distpath',args.distpath,'--name',args.name,'--hidden-import','win32timezone',
         '--hidden-import','dxcam','--collect-binaries','onnxruntime',
         '--exclude-module','torch','--exclude-module','tensorrt',
         '--exclude-module','tensorrt_bindings','--exclude-module','tensorrt_libs',
