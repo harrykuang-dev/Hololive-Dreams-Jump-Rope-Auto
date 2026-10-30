@@ -80,13 +80,17 @@ def create_gpu_runtime(stopped,engine):
 
 
 class FullFrameDetector:
-    def __init__(self,*,stopped=lambda:False,engine=None,backend='auto'):
+    def __init__(self,*,stopped=lambda:False,engine=None,backend='auto',diagnostics=None):
         if backend=='auto':backend=os.environ.get('JUMPROPE_BACKEND','auto')
         if backend not in ('auto','directml','gpu'):raise ValueError('Only TensorRT or DirectML GPU inference is supported')
         self.fallback_reason=None
         self.runtime=None
+        self._diagnostics=diagnostics
+        self.warmup_diagnostics=[]
         if stopped():raise InterruptedError('Model preparation stopped')
         if backend!='directml':
+            began=time.perf_counter_ns()
+            if diagnostics:diagnostics('backend_initialization_begin',backend='tensorrt-fp16',requested=backend)
             try:
                 self.runtime=create_gpu_runtime(stopped,engine)
                 self._warmup(stopped)
@@ -94,6 +98,11 @@ class FullFrameDetector:
                 self._discard_gpu_runtime();raise
             except Exception as error:
                 self._discard_gpu_runtime()
+                if diagnostics:
+                    import traceback
+                    diagnostics('backend_initialization_failed',backend='tensorrt-fp16',
+                        elapsed_ms=(time.perf_counter_ns()-began)/1e6,error_type=type(error).__name__,
+                        message=str(error),traceback=traceback.format_exc())
                 if backend=='gpu':raise
                 if stopped():raise InterruptedError('Model preparation stopped')
                 self.fallback_reason=f'{type(error).__name__}: {error}'
@@ -101,8 +110,18 @@ class FullFrameDetector:
                 LOG.info('TensorRT 無法使用，改用 DirectML：%s',self.fallback_reason)
         else:self.runtime=None
         if self.runtime is None:
-            self.runtime=DirectMLRopeDetector(ROOT/'models/rope.directml.onnx')
-            self._warmup(stopped)
+            began=time.perf_counter_ns()
+            if diagnostics:diagnostics('backend_initialization_begin',backend='onnx-directml',requested=backend)
+            try:
+                self.runtime=DirectMLRopeDetector(ROOT/'models/rope.directml.onnx')
+                self._warmup(stopped)
+            except Exception as error:
+                if diagnostics:
+                    import traceback
+                    diagnostics('backend_initialization_failed',backend='onnx-directml',
+                        elapsed_ms=(time.perf_counter_ns()-began)/1e6,error_type=type(error).__name__,
+                        message=str(error),traceback=traceback.format_exc())
+                raise
         self.backend=self.runtime.backend
         LOG.info('辨識後端：%s',self.backend)
         if hasattr(self.runtime,'adapter'):LOG.info('DirectML 顯示卡：%s',self.runtime.adapter['name'])
@@ -112,9 +131,11 @@ class FullFrameDetector:
         if runtime is not None and hasattr(runtime,'close'):runtime.close()
 
     def _warmup(self,stopped):
+        self.warmup_diagnostics=[]
         for _ in range(15):
             if stopped():raise InterruptedError('Model preparation stopped')
-            self.observe(np.zeros((720,1280,3),np.uint8))
+            observation=self.observe(np.zeros((720,1280,3),np.uint8))
+            self.warmup_diagnostics.append(observation.timings_ms)
     def observe(self,frame,*,already_cropped=True):
         began=time.perf_counter_ns();h,w=frame.shape[:2]
         detections,timing=self.runtime.observe(frame,already_cropped=True)

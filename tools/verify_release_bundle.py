@@ -8,7 +8,7 @@ def verify(executable,root):
     names=['main_ui','app_locale','app_settings','batch_session','jump_rope_bot','window_control',
         'detector','model_runtime','cuda_driver','input_pulse','input_timer','fluent_theme','global_hotkey',
         'timing_control','vision','shared_gate','session_flow','diagnostics','gpu_adapters','optional_accelerator','score_limit',
-        'focus_recovery']
+        'focus_recovery','session_diagnostics','hardware_diagnostics','diagnostic_metrics']
     names += ['controller.'+p.stem for p in (root/'controller').glob('*.py') if p.stem!='__init__']
     hashes={}
     for name in names:

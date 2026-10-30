@@ -163,6 +163,7 @@ class WindowController:
             win32api.SetCursorPos(win32gui.ClientToScreen(self._hwnd, client))
             win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
             self._mouse_down = True
+            self.focus_recovery.note('menu_input_down',action=action,client_point=client)
             self.menu_actions.append((action, self._clock()))
             try:
                 # Menu UI polling is independent of the short, visual-timed jump tap.
@@ -171,6 +172,7 @@ class WindowController:
             finally:
                 win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
                 self._mouse_down = False
+                self.focus_recovery.note('menu_input_up',action=action)
             return True
 
     def _result_tail_allowed(self) -> bool:

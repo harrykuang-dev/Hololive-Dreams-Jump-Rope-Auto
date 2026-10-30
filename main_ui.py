@@ -498,6 +498,8 @@ class JumpRopeApp:
                     self.status.configure(text=self.tr('packing',index=value),foreground=self.STATUS_COLOR)
                 elif kind == 'archive':
                     self.append_log(self.tr('archive',path=value))
+                elif kind == 'diagnostic_error':
+                    self.append_log(self.tr('diagnostic_error',path=value['path'],error=value['error']))
                 elif kind == 'start_hotkey':
                     if value == self._hotkey_generation:
                         self.start()

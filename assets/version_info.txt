@@ -1,13 +1,13 @@
 VSVersionInfo(
-  ffi=FixedFileInfo(filevers=(1,3,1,0), prodvers=(1,3,1,0), mask=0x3f,
+  ffi=FixedFileInfo(filevers=(1,3,2,0), prodvers=(1,3,2,0), mask=0x3f,
                    flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0,
                    date=(0,0)),
   kids=[StringFileInfo([StringTable('040904B0',[
     StringStruct('FileDescription','Hololive Dreams Auto Jump Rope'),
-    StringStruct('FileVersion','1.3.1'),
+    StringStruct('FileVersion','1.3.2'),
     StringStruct('ProductName','Hololive Dreams Jump Rope Auto'),
-    StringStruct('ProductVersion','1.3.1'),
-    StringStruct('OriginalFilename','HololiveDreamsJumpRopeAuto-1.3.1.exe'),
-    StringStruct('LegalCopyright','Local preview; third-party model AGPL-3.0')
+    StringStruct('ProductVersion','1.3.2'),
+    StringStruct('OriginalFilename','HololiveDreamsJumpRopeAuto-1.3.2.exe'),
+    StringStruct('LegalCopyright','Copyright 2026 harrykuang-dev; AGPL-3.0')
   ])]),VarFileInfo([VarStruct('Translation',[1033,1200])])]
 )

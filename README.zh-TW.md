@@ -6,7 +6,7 @@ Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識
 
 ## 下載
 
-從 [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) 下載 **1.3.1** 完整 Windows x64 `.7z` 包並解壓。包內包含 TensorRT 10.13 及 DirectML；相容的 NVIDIA 環境自動使用 TensorRT FP16，其他支援的 GPU 使用 DirectML。
+從 [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) 下載 **1.3.2** 完整 Windows x64 `.7z` 包並解壓。包內包含 TensorRT 10.13 及 DirectML；相容的 NVIDIA 環境自動使用 TensorRT FP16，其他支援的 GPU 使用 DirectML。
 
 保留 EXE、`_internal/` 及 `accelerators/`。玩家端不使用 PyTorch。首次使用 TensorRT 時，程式會在開始遊戲操作前為本機 GPU 建立並快取引擎，可能需要數分鐘。
 
@@ -29,7 +29,7 @@ Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識
 2. 執行 EXE，在「語言/Language」中選擇程式語言。
 3. 設定目標局數（1–999，預設 1 局）；需要更換快捷鍵時，點擊設定框並按下要使用的按鍵。
 4. 點擊「開始」或按開始快捷鍵。程式會嘗試切回遊戲；運行時請保持遊戲前景、完整位於主螢幕內且無遮擋。建議選用深色、短髮、裝飾少的角色和配飾，例如 **儒烏風亭螺鈿（預設服飾）** 配 像素太陽眼睛（pixel sunglasses）。
-5. 按停止快捷鍵或點擊「停止」即可停止。遊戲失焦時會嘗試切回，每批最多恢復三次；需要切換其他程式時，請先停止。
+5. 按停止快捷鍵或點擊「停止」即可停止。遊戲失焦時會嘗試切回，每批最多恢復一次；需要切換其他程式時，請先停止。
 
 ## 使用條件與限制
 
@@ -65,9 +65,9 @@ Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識
 %LOCALAPPDATA%\HololiveJumpRopeAuto\sessions\
 ```
 
-初始化在取得畫面前失敗時，也會產生整批執行的 `session-diagnostics.zip`。開發者模式另記錄失焦時的視窗標題、程序名稱及恢復過程。
+每次執行建立以時間命名的資料夾，所有局數的文字診斷集中於一份 `diagnostics.json`，另存診斷圖片。執行結束後產生 `diagnostics.zip`，包含這份 JSON 及保留的圖片；初始化在取得畫面前失敗時也會保存。
 
-每次運行建立以時間命名的資料夾，每局結束後在 `round-局號` 資料夾中產生 `diagnostics.zip`。回報時請提供程式版本、遊戲語言／角色、解析度、Windows 顯示縮放、問題描述，以及出問題那一局的診斷 ZIP。
+診斷包含顯卡與驅動、實際推論後端與回退錯誤、擷取及推論耗時、識別與起跳判斷、原生輸入時序、搶走焦點的視窗標題與程序名稱，以及停止原因。回報時請附上本次執行的 ZIP 及問題描述。
 
 ## 原始碼與授權
 

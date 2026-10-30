@@ -1,23 +1,16 @@
-"""Opt-in diagnostics, encoded off the input thread and packaged between rounds.
-
-Each round has its own <=20 MiB issue attachment. All observations retain their
-timestamps/decisions. Dense failure screenshots and selected exact sampled
-BGR columns supplement the full trace. Video is deliberately excluded. No network or game assets are used.
-"""
+"""Bounded per-round images and observations for one session-wide diagnostic."""
 from __future__ import annotations
 
-from collections import deque
-import gzip
-import json
+from collections import Counter, defaultdict, deque
+from contextlib import nullcontext
 from pathlib import Path
 import queue
 import threading
-import zipfile
+from session_diagnostics import SessionDiagnostics, ISSUE_LIMIT
 
 import cv2
 import numpy as np
 
-ISSUE_LIMIT = 20 * 1024 * 1024
 SCREENSHOT_LIMIT = 20  # pairs of raw and annotated frames
 JPEG_LIMIT = 96 * 1024
 
@@ -31,7 +24,7 @@ def jpeg_bytes(frame):
 
 
 class RoundDiagnostics:
-    def __init__(self, path, _first_frame, *, fps=60, defer_resize=False):
+    def __init__(self, path, _first_frame, *, fps=60, defer_resize=False, session=None, round_index=1):
         self.directory = Path(path).with_suffix('')
         self.directory.mkdir(parents=True, exist_ok=False)
         self.screens = self.directory / 'screenshots'
@@ -40,7 +33,10 @@ class RoundDiagnostics:
         self.context_dir.mkdir()
         self.context = {}
         self.context_events = []
-        self.archive = self.directory / 'diagnostics.zip'
+        self.owns_session = session is None
+        self.session = session or SessionDiagnostics(self.directory, {'app_version':'1.3.2'})
+        self.round_index = round_index
+        self.archive = self.session.archive
         self.frames = 0
         self.last_t = 0.
         self.last_shot = -10.
@@ -48,6 +44,11 @@ class RoundDiagnostics:
         self.shots = deque()
         self.error = None
         self.performance = {}
+        self._inputs = queue.SimpleQueue()
+        self._samples = defaultdict(lambda: deque(maxlen=10000))
+        self._reasons = Counter()
+        self._counts = Counter()
+        self._previous_capture = self._first_capture = self._last_capture = None
         self._queue = queue.Queue(maxsize=32)
         self._queue_bytes = 0
         self.queue_peak = self.queue_bytes_peak = 0
@@ -56,8 +57,54 @@ class RoundDiagnostics:
         self._thread.start()
 
     def check_health(self):
+        self.session.check_health()
         if self.error:
             raise RuntimeError('Diagnostic recorder failed') from self.error
+
+    def input_event(self, command, context, returned, reason=None):
+        # The native callback only enqueues scalars; JSON/disk/compression work
+        # remains on the diagnostic worker, including the UP timer callback.
+        self._inputs.put(dict(command=command, frame_id=context['frame_id'],
+            capture_ns=context['capture_ns'], native_return_ns=returned,
+            native_call_ns=context.get('native_'+command+'_begin_ns'),
+            expires_ns=context.get('expires_ns'), reason=reason))
+
+    def _drain_inputs(self):
+        while True:
+            try:
+                entry = self._inputs.get_nowait()
+            except queue.Empty:
+                return
+            self.session.event('native_input', round=self.round_index, **entry)
+
+    def _record_observation(self, entry):
+        self._drain_inputs()
+        if entry.get('phase') == 'round':
+            self._counts['game_observations'] += 1
+            for key, condition in (('rope_detected', entry.get('rope_xyxy') is not None),
+                                   ('marker_detected', entry.get('marker_xyxy') is not None),
+                                   ('ready', entry.get('ready')), ('candidates', entry.get('candidate')),
+                                   ('clicked', entry.get('clicked'))):
+                self._counts[key] += bool(condition)
+            self._reasons[entry.get('decision') or 'unknown'] += 1
+            stamp = entry.get('capture_ns')
+            if stamp is not None:
+                if self._first_capture is None:
+                    self._first_capture = stamp
+                self._last_capture = stamp
+                if self._previous_capture is not None:
+                    gap = (stamp-self._previous_capture)/1e6
+                    self._samples['observation_gap_ms'].append(gap)
+                    for limit in (60, 100, 250):
+                        self._counts[f'gaps_over_{limit}ms'] += gap > limit
+                self._previous_capture = stamp
+            for key in ('capture_ms', 'model_ms', 'control_ms', 'capture_return_to_decision_ms'):
+                if isinstance(entry.get(key), (float, int)):
+                    self._samples[key].append(entry[key])
+            for key, value in entry.get('model_timings_ms', {}).items():
+                if isinstance(value, (float, int)):
+                    self._samples['model_'+key].append(value)
+        self.session.event('observation', trace=True, round=self.round_index, **entry)
 
     def add(self, frame, elapsed, *, telemetry=None, **values):
         self.check_health()
@@ -106,7 +153,7 @@ class RoundDiagnostics:
 
     def _encode(self):
         try:
-            with gzip.open(self.directory / 'frames.jsonl.gz', 'wt', encoding='utf-8', compresslevel=3) as trace:
+            with nullcontext():
                 last = None
                 history = deque(maxlen=48)
                 known_hearts = None
@@ -157,7 +204,7 @@ class RoundDiagnostics:
                             prior=next((p for p in reversed(history) if p[1]['t']<=entry['t']-offset),None)
                             if prior:self._snapshot(*prior)
                     entry['diagnostic_loss'] = loss
-                    trace.write(json.dumps(entry, separators=(',', ':'), ensure_ascii=False) + '\n')
+                    self._record_observation(entry)
                     current=(frame,entry,columns)
                     if entry['t'] <= context_until:
                         self._context(current)
@@ -171,6 +218,7 @@ class RoundDiagnostics:
                 if last:
                     self._snapshot(*last)
                 self.tail = list(history)
+                self._drain_inputs()
         except Exception as error:
             self.error = error
 
@@ -183,7 +231,7 @@ class RoundDiagnostics:
             prefix=f"{entry['observation']:06d}"
             raw=self.screens/(prefix+'-raw.jpg')
             annotated=self.screens/(prefix+'-rope.jpg')
-            raw.write_bytes(jpeg_bytes(frame))
+            self.session.image(raw, jpeg_bytes(frame), priority=1)
             overlay=frame.copy()
             pts=np.asarray(entry.get('rope_points',[]),np.int32)
             if len(pts):cv2.polylines(overlay,[pts],False,(255,0,255),2,cv2.LINE_AA)
@@ -195,24 +243,20 @@ class RoundDiagnostics:
             cv2.rectangle(overlay,(0,0),(960,42),(0,0,0),-1)
             cv2.putText(overlay,label,(6,16),cv2.FONT_HERSHEY_SIMPLEX,.44,(255,255,255),1,cv2.LINE_AA)
             cv2.putText(overlay,str(entry.get('decision','')),(6,34),cv2.FONT_HERSHEY_SIMPLEX,.42,(255,255,255),1,cv2.LINE_AA)
-            annotated.write_bytes(jpeg_bytes(overlay))
+            self.session.image(annotated, jpeg_bytes(overlay), priority=1)
             files=[raw,annotated]
-            if columns is not None:
-                pixels=self.screens/(prefix+'-columns.bgr.gz')
-                with gzip.open(pixels,'wb',compresslevel=3) as stream:stream.write(columns.tobytes())
-                files.append(pixels)
             self.saved_shots.append({'observation':entry['observation'],'t':entry['t'],
-                'files':[p.relative_to(self.directory).as_posix() for p in files],
+                'files':[p.relative_to(self.session.directory).as_posix() for p in files],
                 'columns_shape':list(columns.shape) if columns is not None else None})
             raw_paths[entry['observation']]=raw
         self.saved_context=[]
         for sequence,(frame,entry,_columns) in sorted(self.context.items()):
             raw=raw_paths.get(sequence)
-            if raw is None:
+            if raw is None or not raw.exists():
                 raw=self.context_dir/f'{sequence:06d}.jpg'
-                raw.write_bytes(jpeg_bytes(frame))
+                self.session.image(raw, jpeg_bytes(frame), priority=2)
             self.saved_context.append({'observation':sequence,'t':entry['t'],
-                'path':raw.relative_to(self.directory).as_posix()})
+                'path':raw.relative_to(self.session.directory).as_posix()})
         self.shots.clear()
         self.context.clear()
 
@@ -237,41 +281,43 @@ class RoundDiagnostics:
         self.performance = {'observations': self.frames, 'capture_duration': self.last_t,
                             'queue_peak':self.queue_peak,'queue_bytes_peak':self.queue_bytes_peak,
                             'event_screenshots':len(self.saved_shots), 'failure_frames':len(self.saved_context)}
+        duration = ((self._last_capture-self._first_capture)/1e9
+                    if self._first_capture is not None and self._last_capture != self._first_capture else 0)
+        self.performance.update(counts=dict(self._counts), decision_reasons=dict(self._reasons),
+            observed_fps=(self._counts['game_observations']-1)/duration if duration else None,
+            timings={key:dict(samples=len(values), p50=float(np.percentile(values,50)),
+                p95=float(np.percentile(values,95)),maximum=float(max(values)))
+                for key,values in self._samples.items() if values},
+            timing_sample_policy='most recent 10000 values per metric; counts cover all observations')
+        self.performance['findings'] = []
+        if self._counts['gaps_over_100ms']:
+            self.performance['findings'].append('observation_gaps_exceed_motion_history_limit')
+        if self._counts['game_observations'] and not self._counts['candidates']:
+            self.performance['findings'].append('no_jump_proposals; inspect decision_reasons and observation gaps')
+        if self._counts['game_observations'] and self._counts['rope_detected'] < self._counts['game_observations']*.8:
+            self.performance['findings'].append('frequent_rope_detection_missing')
+        if self._counts['game_observations'] and self._counts['marker_detected'] < self._counts['game_observations']*.8:
+            self.performance['findings'].append('frequent_player_marker_missing')
         self.result = result
         self._write_manifest()
 
     def _write_manifest(self):
-        manifest = {'format_version': 2, 'app_version': '1.3.1', 'key_down_ms': 25,
+        manifest = {'app_version': '1.3.2', 'key_down_ms': 25,
                     'video': None, 'result': self.result, 'recording': self.performance,
                     'screenshots':self.saved_shots,'failure_window':self.saved_context,
                     'failure_events':self.context_events,
-                    'screenshot_policy':'last 20 raw/rope event pairs + up to 80 dense frames around loss/end (-0.75s,+0.25s); selected exact sampled BGR columns',
+                    'screenshot_policy':'last 20 raw/rope event pairs + up to 80 frames around loss/end (-0.75s,+0.25s); subject to session image budget',
+                    'evidence_limits':'HUD heart loss is diagnostic feedback, not a precise collision timestamp. No video.',
                     'archive_limit_bytes': ISSUE_LIMIT}
-        (self.directory / 'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+        self.session.event('round_diagnostics', round=self.round_index, **manifest)
 
     def package(self, metadata=None, *, limit=ISSUE_LIMIT):
         """Called only after control/capture ends, including on stop/error."""
-        if metadata:
-            (self.directory / 'performance.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
-        note=self.directory/'README.txt'
-        note.write_text('Attach diagnostics.zip to a GitHub issue. Contains game screenshots; review before sharing. No video.\n'
-            'frames.jsonl.gz: every observation as JSON. t is capture time, input_elapsed is mouse-down time; hearts and player_markers are diagnostic estimates only.\n'
-            'manifest.json maps observations to dense loss/end screenshots and raw/rope-overlay event pairs. JPEG encoding occurs after control ends.\n'
-            'Selected exact sampled columns are gzip BGR uint8; shapes are in manifest.json. All timestamps use the original capture clock.\n'
-            'Images are bounded event samples, not every captured frame. No audio, unpacked assets, memory inspection or automatic upload.\n',encoding='utf-8')
-        files=[p for p in self.directory.rglob('*') if p.is_file()
-               and p != self.archive and not p.name.endswith('.tmp')]
-        temporary=self.archive.with_suffix('.zip.tmp')
-        self._zip(temporary,files)
-        if temporary.stat().st_size>limit:
-            raise RuntimeError('Diagnostics exceed the issue budget; originals retained')
-        with zipfile.ZipFile(temporary) as archive:
-            if archive.testzip() is not None:raise RuntimeError('Diagnostic ZIP verification failed')
-        temporary.replace(self.archive)
-        return self.archive
+        self.session.event('round_metadata', round=self.round_index, metadata=metadata or {})
+        if not self.owns_session:
+            return None
+        self.session.close(stop_reason=self.result.get('stop_reason'))
+        return self.session.package(limit=limit)
 
     def _zip(self, path, files):
-        with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-            for file in sorted(files):
-                archive.write(file, file.relative_to(self.directory).as_posix(),
-                              compress_type=zipfile.ZIP_STORED if file.suffix in ('.jpg', '.gz') else zipfile.ZIP_DEFLATED)
+        self.session._zip(path, files)

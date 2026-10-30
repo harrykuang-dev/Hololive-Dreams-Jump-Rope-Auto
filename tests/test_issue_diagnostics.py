@@ -1,4 +1,3 @@
-import gzip
 import json
 import subprocess
 import sys
@@ -34,15 +33,16 @@ def test_issue_zip_has_screenshots_and_all_observations_without_video(tmp_path):
     with zipfile.ZipFile(archive) as z:
         assert z.testzip() is None
         names = z.namelist()
-        assert 'performance.json' in names
+        assert [name for name in names if not name.endswith('.jpg')] == ['diagnostics.json']
         assert not any(name.endswith(('.mp4','.avi')) for name in names)
-        frames = [json.loads(line) for line in gzip.decompress(z.read('frames.jsonl.gz')).decode().splitlines()]
+        document=json.loads(z.read('diagnostics.json'))
+        frames = [entry for entry in document['events'] if entry['type']=='observation']
         assert len(frames) == 13
         assert [f['observation'] for f in frames] == list(range(13))
         assert sum(f['clicked'] for f in frames) == 1
         assert frames[-1]['phase'] == 'result'
-        manifest = json.loads(z.read('manifest.json'))
-        assert manifest['app_version'] == '1.3.1' and manifest['key_down_ms'] == 25
+        manifest = next(entry for entry in document['events'] if entry['type']=='round_diagnostics')
+        assert manifest['app_version'] == '1.3.2' and manifest['key_down_ms'] == 25
         assert manifest['video'] is None and manifest['failure_window']
         for row in manifest['failure_window']:
             assert row['path'] in names
@@ -59,10 +59,10 @@ def test_issue_zip_has_screenshots_and_all_observations_without_video(tmp_path):
 
 def test_compression_failure_preserves_original(tmp_path, monkeypatch):
     recorder = small_round(tmp_path)
-    monkeypatch.setattr(recorder, '_zip', lambda *_: (_ for _ in ()).throw(RuntimeError('zip failed')))
+    monkeypatch.setattr(recorder.session, '_zip', lambda *_: (_ for _ in ()).throw(RuntimeError('zip failed')))
     with pytest.raises(RuntimeError, match='zip failed'):
         recorder.package()
-    assert (recorder.directory/'frames.jsonl.gz').exists()
+    assert json.loads((recorder.directory/'diagnostics.json').read_text(encoding='utf-8'))['events']
     assert list(recorder.screens.glob('*.jpg'))
     assert not recorder.archive.exists()
 

@@ -1,6 +1,6 @@
 # 開發說明
 
-目前版本為 1.3.1。程式、控制器及 YOLO 衍生權重採用 AGPL-3.0；舊版完整來源及 MIT 授權位於 `archive/v1.2.1/`。`archive/snapshot.json` 記錄原提交與檔案 SHA-256，建置排除存檔。人工標註與訓練工具分別在 `annotations/` 和 `training/`，兩者不進入執行包。
+目前版本為 1.3.2。程式、控制器及 YOLO 衍生權重採用 AGPL-3.0；舊版完整來源及 MIT 授權位於 `archive/v1.2.1/`。`archive/snapshot.json` 記錄原提交與檔案 SHA-256，建置排除存檔。人工標註與訓練工具分別在 `annotations/` 和 `training/`，兩者不進入執行包。
 
 ## 啟動
 
@@ -23,7 +23,7 @@ python main_ui.py --check-only --report model-check.json
 python main_ui.py --check-only --directml --report directml-model-check.json
 python tools/build_release.py
 # Optional: build a portable NVIDIA component from the installed GPU packages.
-python tools/build_tensorrt_component.py dist/HololiveDreamsJumpRopeAuto-1.3.1/accelerators/tensorrt
+python tools/build_tensorrt_component.py dist/HololiveDreamsJumpRopeAuto-1.3.2/accelerators/tensorrt
 ```
 
 `--check-only`只載入並暖機模型，不建立視窗、不擷取、不輸入。GUI測試使用假會話；控制迴圈測試使用合成畫面與假的OS輸入。
@@ -42,11 +42,13 @@ python tools/build_tensorrt_component.py dist/HololiveDreamsJumpRopeAuto-1.3.1/a
 
 DirectML會話建立時暫時隔離CUDA_VISIBLE_DEVICES並在finally恢復，避免本機NVIDIA在CUDA=-1遮罩下原生崩潰；不改系統環境，亦不影響TensorRT的CUDA可用性判定。
 
-`controller/`處理多形態相位、真實時間差、速度、主角落地和有限遮擋預約。`timing_control.py`只偏移掃地和圓周lead，其他門檻及25ms按壓保持。`jump_rope_bot.py`負責單一擷取、來源畫面編號與操作狀態檢查；`input_pulse.py`及`input_timer.py`負責可中斷放開，按住時繼續觀察。`window_control.py`處理還原最小化、前景等待及選單；`focus_recovery.py`在每批執行期間最多嘗試切回三次，恢復前放開輸入、清除過時預測並重建擷取，開發者模式另記錄失焦視窗與程序及恢復事件；`vision.py`包含上一版透明NVIDIA覆蓋層相容性修正。
+`controller/`處理多形態相位、真實時間差、速度、主角落地和有限遮擋預約。`timing_control.py`只偏移掃地和圓周lead，其他門檻及25ms按壓保持。`jump_rope_bot.py`負責單一擷取、來源畫面編號與操作狀態檢查；`input_pulse.py`及`input_timer.py`負責可中斷放開，按住時繼續觀察。`window_control.py`處理還原最小化、前景等待及選單；`focus_recovery.py`在每批執行期間最多嘗試切回一次，恢復前放開輸入、清除過時預測並重建擷取，開發者模式另記錄失焦視窗與程序及恢復事件；`vision.py`包含上一版透明NVIDIA覆蓋層相容性修正。
 
 ## 診斷與打包
 
-開發者模式關閉時，不匯入診斷模組或寫入畫面。開啟後維持有界背景佇列、完整逐幀追蹤、事件及失誤附近截圖，紀錄模型框、控制狀態、時間與實際DOWN/UP，結束後產生不超過20MiB的ZIP；不包含影片，不自動上傳。編碼／寫入失敗會停止輸入並保留資料。
+開發者模式關閉時，不匯入診斷模組或寫入畫面。開啟後，每次開始至結束的所有局數共用一份 `diagnostics.json`（schema 3）及一個 `diagnostics.zip`；JSON 包含系統與顯卡清單、驅動、選卡規則、後端初始化與回退錯誤、模型雜湊、觀察、判斷原因、實際 DOWN/UP、失焦視窗、逐局效能與最終停止原因。初始化未取得畫面也會產生診斷。圖片依局數分資料夾，ZIP 僅包含這份 JSON 與保留的圖片，不包含影片、不自動上傳。
+
+`session_diagnostics.py` 串流追加 JSON；原生輸入回呼只將時間戳放入記憶體佇列，由既有背景診斷工作執行緒寫入。硬體查詢只在初始化進行，CIM 查詢上限8秒，失敗本身也記錄。記錄超量時明確統計省略數量：觀察追蹤上限128MiB原文／約8MiB壓縮資料、其他事件2MiB原文、圖片8MiB；圖片優先保留近期失誤。時間分位數採最近10000筆，總次數與判斷原因覆蓋全程。超過20MiB的ZIP不發布，保留JSON並在介面提示。編碼／寫入失敗會停止輸入並保留資料。
 
 資料夾式EXE必須與`_internal/`一起保留。玩家端不使用 PyTorch；核心不包含TensorRT，使用DirectML即可執行；相容加速元件放在EXE旁的`accelerators/tensorrt/`，`optional_accelerator.py`核對format 2、Python ABI及TensorRT 10.13版本後加入模組與DLL路徑，只有需要NVIDIA加速時才載入。元件缺失或失敗轉用DirectML，沒有自動下載。`archive/`、研究資料、訓練圖片、解包素材及外部模型工具不進入成品。發布包保留依賴授權與 NOTICE；模型引擎快取不納入 Git。
 

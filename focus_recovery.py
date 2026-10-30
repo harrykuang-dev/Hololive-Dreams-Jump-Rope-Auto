@@ -19,12 +19,18 @@ def window_snapshot(hwnd):
         return result
     queries = {'title': win32gui.GetWindowText, 'class': win32gui.GetClassName,
                'visible': win32gui.IsWindowVisible, 'minimized': win32gui.IsIconic,
-               'client_rect': win32gui.GetClientRect}
+               'client_rect': win32gui.GetClientRect, 'window_rect': win32gui.GetWindowRect}
     for key, query in queries.items():
         try:
             result[key] = query(hwnd)
         except Exception as error:
             result[key+'_error'] = str(error)
+    try:
+        result['dpi']=ctypes.windll.user32.GetDpiForWindow(ctypes.c_void_p(hwnd))
+        monitor=win32api.MonitorFromWindow(hwnd,win32con.MONITOR_DEFAULTTONEAREST)
+        result['monitor']=win32api.GetMonitorInfo(monitor)
+    except Exception as error:
+        result['display_error']=str(error)
     try:
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         result['pid'] = pid
@@ -50,7 +56,7 @@ def window_snapshot(hwnd):
 
 
 class FocusRecovery:
-    def __init__(self, *, limit=3, diagnostics=False, sink=None,
+    def __init__(self, *, limit=1, diagnostics=False, sink=None,
                  clock=time.perf_counter, sleeper=time.sleep):
         self.limit, self.attempts, self.successes = limit, 0, 0
         self.diagnostics, self.sink = diagnostics, sink
@@ -69,7 +75,7 @@ class FocusRecovery:
             try:
                 self.sink(entry)
             except Exception:
-                # Keep the in-memory record for the final ZIP. Do not replace
+                # Keep the in-memory record for the final diagnostic. Do not replace
                 # the underlying focus/stop reason with an auxiliary log error.
                 LOG.exception('無法寫入焦點診斷；記錄保留至結束時打包')
 

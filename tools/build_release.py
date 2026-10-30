@@ -4,7 +4,7 @@ import argparse,subprocess,sys
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--distpath',default='dist')
-    parser.add_argument('--name',default='HololiveDreamsJumpRopeAuto-1.3.1')
+    parser.add_argument('--name',default='HololiveDreamsJumpRopeAuto-1.3.2')
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     # Optional TensorRT imports stdlib modules dynamically. Keep the interpreter

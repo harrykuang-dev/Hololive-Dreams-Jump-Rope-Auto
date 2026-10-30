@@ -20,7 +20,8 @@ def visible_hearts(crop):
     return sum(active) if all(a or b for a,b in zip(active,inactive)) else None
 
 class JumpRopeBot(WindowController):
-    def __init__(self,config=None,*,detector=None,pulse_factory=TimedPulse,score_notify=lambda _score:None,**kwargs):
+    def __init__(self,config=None,*,detector=None,pulse_factory=TimedPulse,score_notify=lambda _score:None,
+                 diagnostic_session=None,diagnostic_round=1,**kwargs):
         super().__init__(config,**kwargs)
         self.detector=detector;self.control=ArcCarryPolicy('jump-rope',control_config(
             self.config.timing_position,backend=getattr(detector,'backend',None)))
@@ -28,6 +29,7 @@ class JumpRopeBot(WindowController):
         self.gate_type=type('SessionGate',(EventRoundGate,),{})
         self.frame_id=0;self._last_hearts=None
         self.score_notify=score_notify;self.score_limit_reached=False;self.confirmed_score=None
+        self.diagnostic_session=diagnostic_session;self.diagnostic_round=diagnostic_round
     def _stopped(self):
         if self.pulse and self.pulse.error:raise RuntimeError('Input release failed') from self.pulse.error
         return super()._stopped()
@@ -64,6 +66,8 @@ class JumpRopeBot(WindowController):
                   native_down_call_ms=(context['down_ns']-context.get('native_down_begin_ns',context['down_ns']))/1e6,
                   native_up_call_ms=(returned-context['native_up_begin_ns'])/1e6,
                 capture_return_to_down_ms=(context['down_ns']-context['capture_ns'])/1e6))
+        if self.diagnostic_recorder:
+            self.diagnostic_recorder.input_event(command,context,returned,reason)
         return returned
     def tap_jump(self,frame,decision=None,stamp=None):
         if decision is None or not decision.jump or not decision.ready or self.config.observe_only or self._stopped():return False
@@ -88,7 +92,11 @@ class JumpRopeBot(WindowController):
             self.gate_type.reset_cache();gate=self.gate_type();screen=StartupScreen();navigator=StartupNavigator(screen)
             self.focus_recovery.note('capture_initialization_begin',target_hwnd=self._hwnd)
             capture=GameCapture(self._hwnd,backend=self.config.capture_backend,stop_requested=self._stopped)
-            self.focus_recovery.note('capture_initialization_ready',target_hwnd=self._hwnd)
+            if self.config.diagnostics_enabled:
+                camera=getattr(getattr(capture,'impl',None),'camera',None)
+                details={key:getattr(camera,key,None) for key in ('width','height','device_idx','output_idx')}
+                self.focus_recovery.note('capture_initialization_ready',target_hwnd=self._hwnd,
+                    backend=self.config.capture_backend,camera=details)
             self.pulse=self.pulse_factory(lambda c:self._native('down',c),lambda c,r:self._native('up',c,r))
             score_guard=None
             if self.config.score_limit is not None:
@@ -106,12 +114,15 @@ class JumpRopeBot(WindowController):
                     self._capture_restart=False
                     self.focus_recovery.note('capture_reinitialized_after_focus')
                     continue
+                capture_begin=time.perf_counter_ns()
                 try:frame=capture.grab()
                 except FocusLostError:
                     if not self.ensure_foreground():
                         self.stop_reason='stopped' if self._stopped() else 'focus_lost';break
                     continue
-                except RecoveredFrameGap:self.reset_evidence('capture_recovered');continue
+                except RecoveredFrameGap:
+                    self.focus_recovery.note('capture_gap_recovered',round=self.diagnostic_round)
+                    self.reset_evidence('capture_recovered');continue
                 except NoFreshFrameError:
                     self.reset_evidence('no_fresh_frame')
                     if self.round_started_at is not None and (rope_seen or self.tap_count>0 or time.perf_counter()-self.round_started_at>=3):raise
@@ -123,23 +134,34 @@ class JumpRopeBot(WindowController):
                 if self._stopped():break
                 if self.config.diagnostics_enabled and self.config.record_path and recorder is None:
                     from diagnostics import RoundDiagnostics
-                    recorder=self.diagnostic_recorder=RoundDiagnostics(self.config.record_path,frame)
+                    recorder=self.diagnostic_recorder=RoundDiagnostics(self.config.record_path,frame,
+                        session=self.diagnostic_session,round_index=self.diagnostic_round)
                 observed_size=(frame.shape[1],frame.shape[0])
                 if source_size is not None and source_size!=observed_size:raise RuntimeError('Window resized; restart manually')
                 source_size=observed_size;allowed=gate.observe(frame)
                 if gate.finished:
                     self.stop_reason='round_finished';self.reset_evidence('round_finished')
-                    if recorder:recorder.add(frame,(stamp-began)/1e9,hud=False,telemetry={'phase':'result'})
+                    if recorder:recorder.add(frame,(stamp-began)/1e9,hud=False,
+                        telemetry=dict(phase='result',frame_id=self.frame_id,capture_ns=stamp))
                     break
                 if self.gate_type.gameplay_visible(frame):navigator.seal()
                 if not allowed:
                     self.reset_evidence('not_gameplay')
+                    if recorder:
+                        recorder.add(frame,(stamp-began)/1e9,hud=False,
+                            telemetry=dict(phase='prepare',frame_id=self.frame_id,capture_ns=stamp,
+                                source_size=list(frame.shape[1::-1]),screen=screen.identify(frame)))
                     if self.round_started_at is None and not navigator.finished:
                         action=navigator.observe(frame)
                         if action:
                             try:fresh=capture.grab()
                             except FocusLostError:continue
                             self.frame_id+=1
+                            if recorder:
+                                fresh_ns=time.perf_counter_ns()
+                                recorder.add(fresh,(fresh_ns-began)/1e9,hud=False,
+                                    telemetry=dict(phase='startup_recheck',frame_id=self.frame_id,
+                                        capture_ns=fresh_ns,screen=screen.identify(fresh),menu_action=action))
                             if screen.identify(fresh)==action and self.tap_startup(action,fresh,screen):navigator.mark_clicked(action)
                     if (time.perf_counter_ns()-began)/1e9>self.config.startup_timeout:self.stop_reason='startup_timeout';break
                     self._sleep(.02);continue
@@ -174,6 +196,8 @@ class JumpRopeBot(WindowController):
                         input_elapsed=(self.last_tap_at-began/1e9) if sent else None,
                         telemetry=dict(phase='round',frame_id=self.frame_id,capture_ns=stamp,presentation_ns=None,
                             policy=asdict(decision),decision=decision.reason,diagnostic=dict(self.control.last_diagnostic),
+                            source_size=[w,h],capture_begin_ns=capture_begin,capture_ms=(stamp-capture_begin)/1e6,
+                            model_timings_ms=getattr(prediction,'timings_ms',{}),
                             confirmed_score=self.confirmed_score,score_limit=self.config.score_limit,
                             rope_xyxy=scaled(prediction.rope_xyxy),marker_xyxy=scaled(prediction.marker_xyxy),
                             model_ms=(inferred-model_start)/1e6,control_ms=(controlled-inferred)/1e6,
@@ -190,7 +214,10 @@ class JumpRopeBot(WindowController):
             except Exception as error:self.last_error=self.last_error or error;self.stop_reason='error'
             finally:
                 try:
-                    if capture:capture.close()
+                    if capture:
+                        capture.close()
+                        self.focus_recovery.note('capture_closed',round=self.diagnostic_round,
+                            events=getattr(getattr(capture,'impl',None),'capture_events',[]))
                 except Exception as error:self.last_error=self.last_error or error;self.stop_reason='capture_close_error'
                 try:
                     if recorder:recorder.close(stop_reason=self.stop_reason,tap_count=self.tap_count)

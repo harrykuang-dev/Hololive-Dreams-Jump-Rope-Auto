@@ -21,20 +21,20 @@ def state(monkeypatch):
  s.make=lambda **kw:f.FocusRecovery(clock=lambda:s.now,sleeper=lambda t:setattr(s,'now',s.now+t),**kw)
  return s
 
-def test_fourth_loss_never_activates_and_logs_thief(state):
+def test_second_loss_never_activates_and_logs_thief(state):
  m=state.make(diagnostics=True);released=[]
- for n in range(3):
+ for n in range(1):
   state.fg=2;assert m.ensure(1,stopped=lambda:False,release=lambda:released.append(n))
- state.fg=2;assert not m.ensure(1,stopped=lambda:False,release=lambda:released.append(3))
- assert m.attempts==m.successes==len(state.calls)==3 and len(released)==4
- assert state.keys==[0,2]*3
+ state.fg=2;assert not m.ensure(1,stopped=lambda:False,release=lambda:released.append(1))
+ assert m.attempts==m.successes==len(state.calls)==1 and len(released)==2
+ assert state.keys==[0,2]
  assert [e for e in m.events if e['event']=='focus_lost'][0]['foreground']['title']=='Other app'
 
 @pytest.mark.parametrize('diagnostics',[False,True])
-def test_denied_focus_maximum_three(state,diagnostics):
+def test_denied_focus_maximum_one(state,diagnostics):
  state.allowed=False;m=state.make(diagnostics=diagnostics)
  assert not m.ensure(1,stopped=lambda:False)
- assert m.attempts==len(state.calls)==3 and state.keys==[0,2]*3
+ assert m.attempts==len(state.calls)==1 and state.keys==[0,2]
  if not diagnostics:assert not m.events
 
 @pytest.mark.parametrize('stop_point',['before','alt','wait'])
@@ -71,7 +71,7 @@ def test_diagnostics_off_no_titles(state,monkeypatch):
 def test_activate_exception_releases_alt(state,monkeypatch):
  state.allowed=False
  monkeypatch.setattr(f.win32gui,'SetForegroundWindow',lambda h:(_ for _ in ()).throw(OSError('denied')))
- m=state.make();assert not m.ensure(1,stopped=lambda:False);assert state.keys==[0,2]*3
+ m=state.make();assert not m.ensure(1,stopped=lambda:False);assert state.keys==[0,2]
 
 def test_controller_releases_before_activation_and_invalidates(state,monkeypatch):
  from jump_rope_bot import JumpRopeBot
@@ -85,6 +85,8 @@ def test_controller_releases_before_activation_and_invalidates(state,monkeypatch
 def test_zero_frame_session_has_zip_or_preserves_files(tmp_path,monkeypatch,failure):
  import batch_session as b
  import detector
+ import hardware_diagnostics
+ monkeypatch.setattr(hardware_diagnostics,'collect_system',lambda _:{'mock_inventory':True})
  monkeypatch.setattr(b.win32event,'CreateMutex',lambda *a:123)
  monkeypatch.setattr(b.win32api,'GetLastError',lambda:0)
  monkeypatch.setattr(b.win32api,'CloseHandle',lambda h:None)
@@ -97,10 +99,13 @@ def test_zero_frame_session_has_zip_or_preserves_files(tmp_path,monkeypatch,fail
  if failure=='model':
   with pytest.raises(RuntimeError):session.run()
  else:session.run()
- assert (session.directory/'session.json').exists() and (session.directory/'summary.json').exists()
+ content=json.loads((session.directory/'diagnostics.json').read_text(encoding='utf-8'))
+ assert content['system']['mock_inventory']
+ assert content['events'][-1]['type']=='session_finished'
+ if failure=='model':assert 'initialization failed' in content['events'][-1]['error']['message']
  if failure!='pack':
-  with zipfile.ZipFile(session.directory/'session-diagnostics.zip') as z:
-   assert z.testzip() is None and {'session.log','session.json','summary.json','focus.json'}<=set(z.namelist())
+  with zipfile.ZipFile(session.directory/'diagnostics.zip') as z:
+   assert z.testzip() is None and z.namelist()==['diagnostics.json']
  else:assert session.stop_reason=='focus_lost'
 
 def test_budget_shared_across_real_session_rounds(state,tmp_path,monkeypatch):
@@ -119,12 +124,12 @@ def test_budget_shared_across_real_session_rounds(state,tmp_path,monkeypatch):
  monkeypatch.setattr(b,'JumpRopeBot',Bot)
  s=b.BatchSession(b.SessionConfig(rounds=5),bot_factory=Bot,result_wait=lambda *a,**kw:True,get_key_state=lambda k:0)
  s.focus_recovery=state.make();s.run()
- assert s.completed_rounds==3 and len(managers)==4 and len({id(m) for m in managers})==1
- assert s.focus_recovery.attempts==3 and s.stop_reason=='focus_lost'
+ assert s.completed_rounds==1 and len(managers)==2 and len({id(m) for m in managers})==1
+ assert s.focus_recovery.attempts==1 and s.stop_reason=='focus_lost'
 
 def test_next_round_initial_focus_cannot_bypass_budget(state,monkeypatch):
  from jump_rope_bot import JumpRopeBot
- m=state.make();m.initial_focus_done=True;m.attempts=3
+ m=state.make();m.initial_focus_done=True;m.attempts=1
  bot=JumpRopeBot(focus_recovery=m);monkeypatch.setattr(bot,'find_game',lambda:1)
  assert bot.focus_game() is None and not state.calls and bot.stop_reason=='focus_lost'
 

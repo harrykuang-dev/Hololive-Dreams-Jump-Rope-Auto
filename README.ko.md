@@ -6,7 +6,7 @@ Windows 버전 《hololive Dreams》의 자동 줄넘기 프로그램입니다. 
 
 ## 다운로드
 
-[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest)에서 **1.3.1** Windows x64 전체 `.7z` 패키지를 다운로드하고 압축을 푸세요. TensorRT 10.13과 DirectML을 포함하며, 호환되는 NVIDIA 환경에서는 TensorRT FP16을, 그 외 지원 GPU에서는 DirectML을 자동으로 사용합니다.
+[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest)에서 **1.3.2** Windows x64 전체 `.7z` 패키지를 다운로드하고 압축을 푸세요. TensorRT 10.13과 DirectML을 포함하며, 호환되는 NVIDIA 환경에서는 TensorRT FP16을, 그 외 지원 GPU에서는 DirectML을 자동으로 사용합니다.
 
 EXE, `_internal/`, `accelerators/`를 함께 보관하세요. 실행 시 PyTorch를 사용하지 않습니다. TensorRT를 처음 시작하면 게임 조작 전에 로컬 GPU용 엔진을 생성하고 캐시하므로 몇 분 정도 걸릴 수 있습니다.
 
@@ -29,7 +29,7 @@ EXE, `_internal/`, `accelerators/`를 함께 보관하세요. 실행 시 PyTorch
 2. EXE를 실행하고 언어/Language에서 프로그램 언어를 선택합니다.
 3. 목표를 1–999라운드로 설정합니다. 기본값은 1입니다. 단축키를 바꾸려면 설정란을 클릭하고 원하는 키를 누릅니다.
 4. 시작 버튼이나 시작 단축키를 누릅니다. 프로그램이 게임을 전면으로 전환하려고 시도합니다. 게임 전체가 주 모니터 안에 보이도록 하고 다른 창으로 가리지 마세요. 어두운 색상, 짧은 머리, 장식과 액세서리가 적은 캐릭터를 권장합니다. 예: **쥬후테이 라덴(기본 의상)**과 픽셀 선글라스(pixel sunglasses).
-5. 정지 단축키 또는 정지 버튼으로 멈춥니다. 게임이 포커스를 잃으면 실행당 최대 3회까지 게임을 전경으로 복원합니다. 다른 프로그램으로 전환하기 전에 먼저 정지하세요.
+5. 정지 단축키 또는 정지 버튼으로 멈춥니다. 게임이 포커스를 잃으면 실행당 최대 1회까지 게임을 전경으로 복원합니다. 다른 프로그램으로 전환하기 전에 먼저 정지하세요.
 
 ## 사용 조건과 제한
 
@@ -65,9 +65,9 @@ Windows 10／11 x64와 Windows 게임 클라이언트가 필요합니다. 게임
 %LOCALAPPDATA%\HololiveJumpRopeAuto\sessions\
 ```
 
-화면 캡처 전 초기화에 실패해도 실행 전체의 `session-diagnostics.zip`을 저장합니다. 개발자 모드에서는 포커스를 가져간 창 제목, 프로세스 이름과 복원 과정도 기록합니다.
+실행마다 시간으로 이름을 지정한 폴더를 만들고, 모든 라운드의 텍스트 진단을 `diagnostics.json` 하나에 모아 진단 이미지와 함께 저장합니다. 실행 종료 시 이 JSON과 보관된 이미지를 포함한 `diagnostics.zip`을 생성합니다. 화면 캡처 전에 초기화가 실패한 경우에도 저장합니다.
 
-실행할 때마다 시간으로 이름을 지정한 폴더를 만들고 각 라운드 종료 후 `round-번호` 폴더에 `diagnostics.zip`을 생성합니다. 프로그램 버전, 게임 언어／캐릭터, 해상도, Windows 배율, 문제 설명과 해당 라운드의 ZIP을 제공하세요.
+GPU·드라이버 정보, 실제 추론 백엔드와 폴백 오류, 캡처·추론 시간, 인식 및 점프 판단, 입력 시각, 포커스를 가져간 창 제목과 프로세스 이름, 정지 이유를 기록합니다. 문제를 보고할 때 이번 실행의 ZIP과 문제 설명을 첨부하세요.
 
 ## 소스 코드 및 라이선스
 

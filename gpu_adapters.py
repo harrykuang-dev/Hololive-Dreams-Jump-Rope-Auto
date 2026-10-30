@@ -16,7 +16,7 @@ def _method(pointer,index,result,*args):
     return ctypes.WINFUNCTYPE(result,ctypes.c_void_p,*args)(table[index])
 
 
-def hardware_adapters():
+def adapter_inventory():
     factory=ctypes.c_void_p();result=[]
     guid=(ctypes.c_ubyte*16).from_buffer_copy(uuid.UUID('770aae78-f26f-4dba-a829-253c83d1b387').bytes_le)
     device_guid=(ctypes.c_ubyte*16).from_buffer_copy(uuid.UUID('189819f1-1db6-4b57-be54-1821339b85f7').bytes_le)
@@ -37,11 +37,22 @@ def hardware_adapters():
             try:
                 desc=Desc();code=_method(adapter,10,ctypes.c_long,ctypes.POINTER(Desc))(adapter,ctypes.byref(desc))
                 if code<0:raise OSError(f'DXGI adapter description failed: {code:#x}')
-                # Never ask DirectML to use WARP/Microsoft software rendering.
-                if desc.flags&2 or desc.vendor==0x1414:continue
-                if d3d(adapter,0xb000,ctypes.byref(device_guid),None)<0:continue
+                software=bool(desc.flags&2 or desc.vendor==0x1414)
+                support=None if software else d3d(adapter,0xb000,ctypes.byref(device_guid),None)
                 result.append(dict(device_id=index,name=desc.name,vendor_id=desc.vendor,
-                                   dedicated_bytes=desc.dedicated,software=False))
+                    pci_device_id=desc.device,subsystem_id=desc.subsystem,revision=desc.revision,
+                    dedicated_bytes=desc.dedicated,shared_bytes=desc.shared,
+                    luid=f'{desc.luid_high&0xffffffff:08x}:{desc.luid_low:08x}',software=software,
+                    d3d12_hresult=None if support is None else f'0x{support&0xffffffff:08X}',
+                    eligible=not software and support>=0,
+                    exclusion_reason='software_adapter' if software else 'd3d12_unavailable' if support<0 else None))
             finally:_method(adapter,2,ctypes.c_ulong)(adapter)
     finally:_method(factory,2,ctypes.c_ulong)(factory)
-    return sorted(result,key=lambda a:(-a['dedicated_bytes'],a['device_id']))
+    return result
+
+
+def hardware_adapters():
+    # Same explicit device selection as before; inventory includes excluded
+    # adapters so a report explains why a visible GPU was not selected.
+    return sorted((a for a in adapter_inventory() if a['eligible']),
+                  key=lambda a:(-a['dedicated_bytes'],a['device_id']))

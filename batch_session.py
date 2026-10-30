@@ -7,7 +7,8 @@ import logging
 import os
 import sys
 import threading
-import zipfile
+import time
+import traceback
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +23,7 @@ from session_flow import wait_for_result_page
 from vision import GameCapture
 from timing_control import DEFAULT_TIMING_POSITION, offset_ms, validate_timing_position
 
-APP_VERSION = '1.3.1'
+APP_VERSION = '1.3.2'
 LOG = logging.getLogger('jump-rope-auto')
 
 
@@ -65,30 +66,18 @@ class BatchSession:
         self.current_round = self.completed_rounds = self.completed_inputs = 0
         self.stop_reason = 'not_started'
         self.directory = None
+        self.diagnostics = None
         from focus_recovery import FocusRecovery
         self.focus_recovery=FocusRecovery(diagnostics=config.diagnostics,sink=self._focus_event)
 
     def _focus_event(self,event):
-        if self.directory:
-            with (self.directory/'focus-events.jsonl').open('a',encoding='utf-8') as stream:
-                stream.write(json.dumps(event,ensure_ascii=False)+'\n')
+        if self.diagnostics:
+            self.diagnostics.event('focus', **event)
 
     def _session_package(self):
         """Always available, including zero-frame initialization/focus failures."""
-        if not self.directory:return
-        payload={'limit':3,'attempts':self.focus_recovery.attempts,
-                 'successes':self.focus_recovery.successes,'events':self.focus_recovery.events}
-        (self.directory/'focus.json').write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8')
-        archive=self.directory/'session-diagnostics.zip'
-        temporary=archive.with_suffix('.zip.tmp')
-        with zipfile.ZipFile(temporary,'w',compression=zipfile.ZIP_DEFLATED) as output:
-            for path in sorted(self.directory.iterdir()):
-                if path.is_file() and path.suffix in ('.json','.jsonl','.log'):
-                    output.write(path,path.name)
-        with zipfile.ZipFile(temporary) as output:
-            if output.testzip() is not None:raise RuntimeError('Session diagnostic ZIP verification failed')
-        temporary.replace(archive)
-        self.notify('archive',str(archive))
+        if self.diagnostics:
+            self.notify('archive',str(self.diagnostics.package()))
 
     @property
     def inputs(self):
@@ -107,14 +96,12 @@ class BatchSession:
 
     def run(self):
         mutex = win32event.CreateMutex(None, False, 'Local\\HololiveJumpRopeAutoSingleRound')
-        if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-            win32api.CloseHandle(mutex)
-            raise RuntimeError('Another jump-rope controller is already running')
+        duplicate = win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS
         handler = None
+        old_level = LOG.level
+        session_error = None
+        began = time.perf_counter_ns()
         try:
-            if self._stopped():
-                self.stop_reason = 'stopped'
-                return
             if self.config.diagnostics:
                 self.directory = (self._base or diagnostic_base()) / datetime.now().strftime('%Y%m%d-%H%M%S-%f')
                 self.directory.mkdir(parents=True, exist_ok=False)
@@ -127,28 +114,33 @@ class BatchSession:
                             'startup_recognizer': 'pill_geometry_v1', 'detector': 'yolo26n-whole-rope-marker',
                             'capture_backend': 'dxgi', 'target_fps': 60,
                             'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest() if executable else None}
-                (self.directory / 'session.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-                handler = logging.FileHandler(self.directory / 'session.log', encoding='utf-8')
-                handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
-                LOG.addHandler(handler)
+                from session_diagnostics import SessionDiagnostics, DiagnosticLogHandler
+                from hardware_diagnostics import collect_system, model_identity
+                self.diagnostics = SessionDiagnostics(self.directory, manifest,
+                    system=collect_system(self.directory))
+                self.diagnostics.event('model_identity', models=model_identity(Path(__file__).resolve().parent))
+                handler = DiagnosticLogHandler(self.diagnostics)
+                LOG.addHandler(handler); LOG.setLevel(logging.INFO)
                 self.notify('diagnostics', str(self.directory))
+            if duplicate:
+                raise RuntimeError('Another jump-rope controller is already running')
+            if self._stopped():
+                self.stop_reason = 'stopped'
+                return
             self.focus_recovery.note('session_started')
             detector = None
             if self._bot_factory is JumpRopeBot:
                 from detector import FullFrameDetector
                 LOG.info('正在準備辨識模型')
                 self.focus_recovery.note('model_initialization_begin')
-                detector = FullFrameDetector(stopped=self._stopped)
+                detector = FullFrameDetector(stopped=self._stopped,
+                    **({'diagnostics':self.diagnostics.event} if self.diagnostics else {}))
                 self.focus_recovery.note('model_initialization_ready',backend=detector.backend)
-                if self.directory:
-                    manifest['inference_backend'] = detector.backend
-                    manifest['backend_fallback_reason'] = detector.fallback_reason
-                    manifest['gpu_adapter'] = getattr(detector.runtime,'adapter',None)
-                    manifest['cpu_inference'] = False
+                if self.diagnostics:
+                    from hardware_diagnostics import loaded_runtime
                     from timing_control import control_config
-                    manifest['frame_validity_ms'] = control_config(
-                        self.config.timing_position,backend=detector.backend)['frame_validity_ms']
-                    (self.directory / 'session.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+                    self.diagnostics.event('model_initialization_ready', runtime=loaded_runtime(detector),
+                        control=control_config(self.config.timing_position,backend=detector.backend))
                 if self._stopped():
                     self.stop_reason = 'stopped'
                     return
@@ -157,6 +149,9 @@ class BatchSession:
                     self.stop_reason = 'stopped'
                     break
                 self.current_round = index
+                if self.diagnostics:
+                    self.diagnostics.check_health()
+                    self.diagnostics.event('round_started', round=index)
                 self.notify('round', (index, self.config.rounds))
                 path = self.directory / f'round-{index:02d}.mp4' if self.directory else None
                 bot = self._bot_factory(BotConfig(
@@ -169,6 +164,7 @@ class BatchSession:
                     round_timeout=900,
                     result_postroll=3 if self.config.rounds > 1 else 1), stop_requested=self._stopped,
                     **({'detector':detector,'score_notify':lambda score:self.notify('score_limit',score),
+                        'diagnostic_session':self.diagnostics,'diagnostic_round':index,
                         'focus_recovery':self.focus_recovery} if detector is not None else {}))
                 with self._count_lock:
                     self.current_bot = bot
@@ -186,23 +182,22 @@ class BatchSession:
                         self.completed_rounds += 1
                     self.notify('round_done', (index, bot.stop_reason, bot.tap_count))
                     recorder = getattr(bot, 'diagnostic_recorder', None)
+                    if self.diagnostics:
+                        pulses=getattr(bot,'input_pulses',[])
+                        from diagnostic_metrics import pulse_summary
+                        self.diagnostics.event('round_finished', round=index,
+                            completed=finished, stop_reason=bot.stop_reason,
+                            inputs=bot.tap_count, candidates=getattr(bot,'candidate_count',None),
+                            menu_actions=getattr(bot,'menu_actions',[]), input_summary=pulse_summary(pulses),
+                            error=str(getattr(bot,'last_error',None)) if getattr(bot,'last_error',None) else None,
+                            recording=getattr(recorder,'performance',None),
+                            score_limit_reached=getattr(bot,'score_limit_reached',False))
                     if recorder is not None and hasattr(recorder, 'result'):
-                        self.notify('packing', index)
-                        if handler:
-                            handler.flush()
-                            (recorder.directory / 'session.log').write_bytes((self.directory / 'session.log').read_bytes()[-1024*1024:])
-                            (recorder.directory / 'session.json').write_bytes((self.directory / 'session.json').read_bytes())
-                            (recorder.directory/'focus.json').write_text(json.dumps({
-                                'attempts':self.focus_recovery.attempts,'limit':3,
-                                'events':self.focus_recovery.events},ensure_ascii=False,indent=2),encoding='utf-8')
-                        archive = recorder.package({
-                            'performance': getattr(bot, 'basic_performance', {}),
-                            'input_pulses': getattr(bot, 'input_pulses', []),
+                        recorder.package({
                             'score_limit':self.config.score_limit,
                             'score_limit_reached':getattr(bot,'score_limit_reached',False),
                             'confirmed_stop_score':getattr(bot,'confirmed_score',None) if getattr(bot,'score_limit_reached',False) else None,
                             'app_version': APP_VERSION})
-                        self.notify('archive', str(archive))
                 if not finished or index == self.config.rounds or self._stopped():
                     if self._stopped():
                         self.stop_reason = 'stopped'
@@ -211,36 +206,35 @@ class BatchSession:
                         ensure_foreground=lambda:self.focus_recovery.ensure(bot._hwnd,stopped=self._stopped),
                         capture_factory=lambda hwnd: GameCapture(hwnd, backend='dxgi')):
                     self.stop_reason = ('stopped' if self._stopped() else
-                                        'focus_lost' if self.focus_recovery.attempts>=3 else 'result_not_confirmed')
+                                        'focus_lost' if self.focus_recovery.attempts>=self.focus_recovery.limit else 'result_not_confirmed')
                     break
             self.notify('finished', self.stop_reason)
         except InterruptedError:
             self.stop_reason = 'stopped'
             self.notify('finished', self.stop_reason)
-        except Exception:
+        except Exception as error:
             self.stop_reason = 'error'
+            session_error=dict(type=type(error).__name__,message=str(error),traceback=traceback.format_exc())
             LOG.exception('執行已停止')
             raise
         finally:
             try:
-                if self.directory:
-                    (self.directory / 'summary.json').write_text(json.dumps({
-                        'app_version': APP_VERSION,
-                        'completed_rounds': self.completed_rounds,
-                        'round_limit': self.config.rounds, 'inputs': self.inputs,
-                        'stop_reason': self.stop_reason,
-                        'focus_recovery_attempts':self.focus_recovery.attempts,
-                        'focus_recovery_limit':3,
-                    }, indent=2), encoding='utf-8')
-            finally:
-                try:
+                if self.diagnostics:
+                    from hardware_diagnostics import loaded_runtime, system_status
                     self.focus_recovery.note('session_finished',stop_reason=self.stop_reason)
-                    if handler:handler.flush()
+                    if handler:LOG.removeHandler(handler)
+                    self.diagnostics.close(completed_rounds=self.completed_rounds,
+                        round_limit=self.config.rounds,inputs=self.inputs,stop_reason=self.stop_reason,
+                        error=session_error, elapsed_ms=(time.perf_counter_ns()-began)/1e6,
+                        focus_recovery=dict(attempts=self.focus_recovery.attempts,
+                            limit=self.focus_recovery.limit,successes=self.focus_recovery.successes),
+                        runtime=loaded_runtime(),system_status=system_status())
                     self._session_package()
-                except Exception:
-                    LOG.exception('診斷ZIP建立失敗；原始執行資料保留')
-                finally:
-                    if handler:
-                        LOG.removeHandler(handler)
-                        handler.close()
-                    win32api.CloseHandle(mutex)
+            except Exception as error:
+                LOG.exception('診斷ZIP建立失敗；原始執行資料保留')
+                self.notify('diagnostic_error',dict(path=str(self.directory),error=str(error)))
+            finally:
+                if handler:
+                    LOG.removeHandler(handler);handler.close()
+                LOG.setLevel(old_level)
+                win32api.CloseHandle(mutex)
