@@ -22,10 +22,10 @@ def main():
     if a.core:
         if not a.full_7z:
             files=[f for f in a.core.rglob('*') if f.is_file() and 'accelerators' not in f.relative_to(a.core).parts]
-            records.append(zip_files(a.output/'HololiveDreamsJumpRopeAuto-1.3.2-windows-x64.zip',files,a.core,a.core.name+'/'))
+            records.append(zip_files(a.output/'HololiveDreamsJumpRopeAuto-1.3.3-windows-x64.zip',files,a.core,a.core.name+'/'))
         if a.full_7z:
             executable=shutil.which('7z') or 'C:/Program Files/7-Zip/7z.exe'
-            target=(a.output/'HololiveDreamsJumpRopeAuto-1.3.2-windows-x64-full.7z').resolve()
+            target=(a.output/'HololiveDreamsJumpRopeAuto-1.3.3-windows-x64-full.7z').resolve()
             if target.exists():raise FileExistsError(target)
             subprocess.run([executable,'a','-t7z','-mx=5','-mmt=4','-bd','-bso0',str(target),a.core.name],cwd=a.core.resolve().parent,check=True)
             subprocess.run([executable,'t','-bd','-bso0',str(target)],check=True)
@@ -36,7 +36,7 @@ def main():
     if a.accelerator:
         files=[f for f in a.accelerator.rglob('*') if f.is_file() and '__pycache__' not in f.parts and f.suffix!='.pyc']
         if a.single_accelerator:
-            record=zip_files(a.output/'HololiveDreamsJumpRopeAuto-1.3.2-tensorrt.zip',files,a.accelerator,'accelerators/tensorrt/')
+            record=zip_files(a.output/'HololiveDreamsJumpRopeAuto-1.3.3-tensorrt.zip',files,a.accelerator,'accelerators/tensorrt/')
             if record['bytes']>=2_000_000_000:raise RuntimeError('Single accelerator ZIP exceeds the release asset limit')
             records.append(record)
             (a.output/'accelerator-assets.json').write_text(json.dumps(records,indent=2)+'\n',encoding='utf-8')
@@ -49,7 +49,7 @@ def main():
             if index is None:buckets.append([]);sizes.append(0);index=len(buckets)-1
             buckets[index].append(file);sizes[index]+=size
         for index,bucket in enumerate(buckets,1):
-            records.append(zip_files(a.output/f'HololiveDreamsJumpRopeAuto-1.3.2-tensorrt-part{index}.zip',bucket,a.accelerator,'accelerators/tensorrt/'))
+            records.append(zip_files(a.output/f'HololiveDreamsJumpRopeAuto-1.3.3-tensorrt-part{index}.zip',bucket,a.accelerator,'accelerators/tensorrt/'))
             print('Packed accelerator part',index,'of',len(buckets),flush=True)
     manifest=a.output/('accelerator-assets.json' if a.accelerator else 'core-assets.json')
     manifest.write_text(json.dumps(records,indent=2)+'\n',encoding='utf-8')

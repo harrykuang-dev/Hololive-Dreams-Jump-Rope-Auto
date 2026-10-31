@@ -17,7 +17,7 @@ def document(session):
 
 
 def test_single_json_survives_unicode_concurrent_inputs_and_logs(tmp_path):
-    session=SessionDiagnostics(tmp_path, {'app_version':'1.3.2'})
+    session=SessionDiagnostics(tmp_path, {'app_version':'1.3.3'})
     handler=DiagnosticLogHandler(session)
     def write(index):
         for sequence in range(100):
@@ -65,7 +65,7 @@ def test_nonfinite_values_and_user_profile_are_safe_json(tmp_path,monkeypatch):
 
 
 def test_multi_round_records_and_images_share_only_one_json_and_zip(tmp_path):
-    session=SessionDiagnostics(tmp_path,{'app_version':'1.3.2'})
+    session=SessionDiagnostics(tmp_path,{'app_version':'1.3.3'})
     image=np.zeros((540,960,3),np.uint8)
     for index in (1,2):
         recorder=RoundDiagnostics(tmp_path/f'round-{index:02}.mp4',image,

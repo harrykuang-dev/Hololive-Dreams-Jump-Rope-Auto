@@ -6,7 +6,7 @@ A jump-rope program for the Windows version of *hololive Dreams*. It tracks the 
 
 ## Download
 
-Download **1.3.2** from [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) and extract the complete Windows x64 `.7z` package. It includes TensorRT 10.13 and DirectML. Compatible NVIDIA systems automatically use TensorRT FP16; other supported GPUs use DirectML.
+Download **1.3.3** from [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) and extract the complete Windows x64 `.7z` package. It includes TensorRT 10.13 and DirectML. Compatible NVIDIA systems automatically use TensorRT FP16; other supported GPUs use DirectML.
 
 Keep the EXE, `_internal/`, and `accelerators/` together. The player runtime does not use PyTorch. On the first TensorRT start, the program builds and caches an engine for the local GPU before gameplay; this can take several minutes.
 

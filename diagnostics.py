@@ -34,7 +34,7 @@ class RoundDiagnostics:
         self.context = {}
         self.context_events = []
         self.owns_session = session is None
-        self.session = session or SessionDiagnostics(self.directory, {'app_version':'1.3.2'})
+        self.session = session or SessionDiagnostics(self.directory, {'app_version':'1.3.3'})
         self.round_index = round_index
         self.archive = self.session.archive
         self.frames = 0
@@ -302,7 +302,7 @@ class RoundDiagnostics:
         self._write_manifest()
 
     def _write_manifest(self):
-        manifest = {'app_version': '1.3.2', 'key_down_ms': 25,
+        manifest = {'app_version': '1.3.3', 'key_down_ms': 25,
                     'video': None, 'result': self.result, 'recording': self.performance,
                     'screenshots':self.saved_shots,'failure_window':self.saved_context,
                     'failure_events':self.context_events,

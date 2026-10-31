@@ -15,10 +15,6 @@ import win32ui
 import win32con
 
 
-class TemporaryCaptureOverlayError(RuntimeError):
-    """Computer Use's transient launch indicators still obstruct the client."""
-
-
 class FocusLostError(RuntimeError):
     """The current frame is invalid; recover focus before a fresh capture."""
 
@@ -71,8 +67,8 @@ class ScreenCapture:
     """Copy the visible client from the desktop, with reusable GDI resources.
 
     Unlike PrintWindow this does not ask Unity to render synchronously.
-    Foreground, on-screen and unobscured client checks are mandatory. Never
-    fall back through an occlusion: another application's pixels are unsafe.
+    Requires a foreground, non-minimized client wholly on screen. Overlapping
+    windows do not block capture; their visible pixels remain in the image.
     """
     def __init__(self, hwnd):
         self.hwnd = hwnd
@@ -80,34 +76,6 @@ class ScreenCapture:
         self.window_dc = self.source = self.memory = self.bitmap = None
         self.previous_bitmap = None
         self.closed = False
-
-    @staticmethod
-    def _non_occluding_layer(hwnd):
-        """Distinguish transparent compositor hosts from visible overlays.
-
-        Click-through alone does not imply invisible: an OSD may still draw
-        over the game. Re-read opacity on every guard check and fail closed
-        for per-pixel layers whose opacity cannot be queried.
-        """
-        try:
-            style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
-            if not style & win32con.WS_EX_LAYERED:
-                return False
-            color_key, alpha, flags = win32gui.GetLayeredWindowAttributes(hwnd)
-            if flags & win32con.LWA_ALPHA and alpha == 0:
-                return True
-            # NVIDIA's idle Desktop Transparency host reports a successful
-            # all-zero attribute query, yet keeps a full-screen HWND visible
-            # in Z order. Limit this compatibility case to its exact host
-            # identity and click-through tool-window state. Other zero-flag
-            # or visible NVIDIA layers must still block desktop capture.
-            transparent_tool = win32con.WS_EX_TRANSPARENT | win32con.WS_EX_TOOLWINDOW
-            return (color_key == alpha == flags == 0
-                    and style & transparent_tool == transparent_tool
-                    and win32gui.GetWindowText(hwnd) == 'NVIDIA GeForce Overlay DT'
-                    and win32gui.GetClassName(hwnd) == 'CEF-OSC-WIDGET')
-        except (OSError, win32gui.error):
-            return False
 
     def _visible_client(self):
         if not win32gui.IsWindow(self.hwnd):
@@ -121,28 +89,6 @@ class ScreenCapture:
         vw, vh = user.GetSystemMetrics(78), user.GetSystemMetrics(79)
         if width <= 0 or height <= 0 or x < vx or y < vy or x+width > vx+vw or y+height > vy+vh:
             raise RuntimeError('遊戲客戶區不完整位於螢幕內；已停止')
-        # Walk only the windows above the target in Z order, not all processes.
-        above = win32gui.GetWindow(self.hwnd, win32con.GW_HWNDPREV)
-        seen = set()
-        while above:
-            if above in seen:
-                raise RuntimeError('視窗順序改變，無法確認無遮擋；已停止')
-            seen.add(above)
-            if win32gui.IsWindowVisible(above) and not win32gui.IsIconic(above):
-                cloaked = ctypes.c_int()
-                status = ctypes.windll.dwmapi.DwmGetWindowAttribute(
-                    ctypes.c_void_p(above), 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
-                if status != 0 or not cloaked.value:
-                    left, top, right, bottom = win32gui.GetWindowRect(above)
-                    if (max(left, x) < min(right, x+width) and max(top, y) < min(bottom, y+height)
-                            and not self._non_occluding_layer(above)):
-                        title = win32gui.GetWindowText(above)
-                        error = (TemporaryCaptureOverlayError
-                                 if title in ('ChatGPT is using your computer. Esc to cancel',
-                                              'Codex Computer Use Cursor Overlay')
-                                 else RuntimeError)
-                        raise error(f'其他視窗覆蓋遊戲；高速擷取安全停止：{title!r}')
-            above = win32gui.GetWindow(above, win32con.GW_HWNDPREV)
         return x, y, width, height
 
     def _release_buffers(self):
@@ -183,7 +129,7 @@ class ScreenCapture:
                            win32con.SRCCOPY | 0x40000000)  # CAPTUREBLT is absent in some pywin32 builds.
         pixels = self.bitmap.GetBitmapBits(True)
         frame = np.frombuffer(pixels, np.uint8).reshape(height, width, 4)[:, :, :3].copy()
-        # A focus/move/overlay race invalidates the frame, including the fresh
+        # A focus/move race invalidates the frame, including the fresh
         # pre-input capture. Never return a cached or partially shifted frame.
         if self._visible_client() != rect:
             raise RuntimeError('擷取期間視窗位置或尺寸改變；已停止')

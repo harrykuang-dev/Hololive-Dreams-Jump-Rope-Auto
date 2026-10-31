@@ -273,8 +273,8 @@ def test_help_is_centered_on_parent_and_reused(root):
 def test_version_is_in_footer_and_not_window_title(root):
     app = main_ui.JumpRopeApp(root)
     try:
-        assert app.version_label.cget('text') == 'v1.3.2'
-        assert '1.3.2' not in root.title()
+        assert app.version_label.cget('text') == 'v1.3.3'
+        assert '1.3.3' not in root.title()
         assert app.status.cget('text') == '等待開始'
         assert app.counter.cget('text') == '已完成：0 / 1 局'
         assert not hasattr(app,'round_hint') and not hasattr(app,'log_title')

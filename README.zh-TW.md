@@ -6,7 +6,7 @@ Windows 版《hololive Dreams》的自動跳繩程式。透過遊戲畫面辨識
 
 ## 下載
 
-從 [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) 下載 **1.3.2** 完整 Windows x64 `.7z` 包並解壓。包內包含 TensorRT 10.13 及 DirectML；相容的 NVIDIA 環境自動使用 TensorRT FP16，其他支援的 GPU 使用 DirectML。
+從 [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) 下載 **1.3.3** 完整 Windows x64 `.7z` 包並解壓。包內包含 TensorRT 10.13 及 DirectML；相容的 NVIDIA 環境自動使用 TensorRT FP16，其他支援的 GPU 使用 DirectML。
 
 保留 EXE、`_internal/` 及 `accelerators/`。玩家端不使用 PyTorch。首次使用 TensorRT 時，程式會在開始遊戲操作前為本機 GPU 建立並快取引擎，可能需要數分鐘。
 

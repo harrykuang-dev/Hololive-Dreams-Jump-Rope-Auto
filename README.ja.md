@@ -6,7 +6,7 @@ Windows 版『hololive Dreams』の自動なわとびプログラムです。ゲ
 
 ## ダウンロード
 
-[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) から **1.3.2** の Windows x64 完全版 `.7z` パッケージをダウンロードして展開してください。TensorRT 10.13 と DirectML を同梱し、対応する NVIDIA 環境では TensorRT FP16、それ以外の対応 GPU では DirectML を自動的に使用します。
+[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) から **1.3.3** の Windows x64 完全版 `.7z` パッケージをダウンロードして展開してください。TensorRT 10.13 と DirectML を同梱し、対応する NVIDIA 環境では TensorRT FP16、それ以外の対応 GPU では DirectML を自動的に使用します。
 
 EXE、`_internal/`、`accelerators/` を同じ場所に保持してください。実行時に PyTorch は使用しません。TensorRT の初回起動時は、ゲーム操作を始める前にローカル GPU 用のエンジンを構築してキャッシュするため、数分かかる場合があります。
 

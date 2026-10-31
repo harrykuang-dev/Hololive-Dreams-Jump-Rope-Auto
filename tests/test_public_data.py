@@ -49,7 +49,7 @@ def test_six_readmes_have_same_language_order_current_version_and_licenses():
         value=(ROOT/name).read_text(encoding='utf-8');links=value.splitlines()[2]
         if previous is not None:assert links==previous
         previous=links
-        assert '**1.3.2**' in value and 'AGPL-3.0' in value and 'CC BY 4.0' in value
+        assert '**1.3.3**' in value and 'AGPL-3.0' in value and 'CC BY 4.0' in value
         assert 'annotations/README.md' in value and 'HololiveDreamsJumpRopeAuto-1.2.1.exe' not in value
         assert 'Local preview' not in value and '本地預覽' not in value
 

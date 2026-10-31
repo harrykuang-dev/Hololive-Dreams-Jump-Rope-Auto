@@ -6,7 +6,7 @@ Windows 버전 《hololive Dreams》의 자동 줄넘기 프로그램입니다. 
 
 ## 다운로드
 
-[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest)에서 **1.3.2** Windows x64 전체 `.7z` 패키지를 다운로드하고 압축을 푸세요. TensorRT 10.13과 DirectML을 포함하며, 호환되는 NVIDIA 환경에서는 TensorRT FP16을, 그 외 지원 GPU에서는 DirectML을 자동으로 사용합니다.
+[Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest)에서 **1.3.3** Windows x64 전체 `.7z` 패키지를 다운로드하고 압축을 푸세요. TensorRT 10.13과 DirectML을 포함하며, 호환되는 NVIDIA 환경에서는 TensorRT FP16을, 그 외 지원 GPU에서는 DirectML을 자동으로 사용합니다.
 
 EXE, `_internal/`, `accelerators/`를 함께 보관하세요. 실행 시 PyTorch를 사용하지 않습니다. TensorRT를 처음 시작하면 게임 조작 전에 로컬 GPU용 엔진을 생성하고 캐시하므로 몇 분 정도 걸릴 수 있습니다.
 

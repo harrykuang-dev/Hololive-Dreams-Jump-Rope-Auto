@@ -6,7 +6,7 @@ Program lompat tali untuk *hololive Dreams* versi Windows. Program mengenali pos
 
 ## Unduh
 
-Unduh **1.3.2** dari [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) dan ekstrak paket lengkap Windows x64 `.7z`. Paket menyertakan TensorRT 10.13 dan DirectML. Sistem NVIDIA yang kompatibel otomatis memakai TensorRT FP16; GPU lain yang didukung memakai DirectML.
+Unduh **1.3.3** dari [Releases](https://github.com/harrykuang-dev/Hololive-Dreams-Jump-Rope-Auto/releases/latest) dan ekstrak paket lengkap Windows x64 `.7z`. Paket menyertakan TensorRT 10.13 dan DirectML. Sistem NVIDIA yang kompatibel otomatis memakai TensorRT FP16; GPU lain yang didukung memakai DirectML.
 
 Simpan EXE, `_internal/`, dan `accelerators/` dalam folder yang sama. Program tidak menggunakan PyTorch saat dijalankan. Saat TensorRT pertama kali dimulai, program membangun dan menyimpan cache engine untuk GPU lokal sebelum mengoperasikan game; proses ini dapat memerlukan beberapa menit.
 
