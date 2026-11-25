@@ -309,5 +309,6 @@ TEXT['ja'].update({'score_limit': '停止スコア', 'unlimited': '無制限', '
 TEXT['ko'].update({'score_limit': '중지 점수', 'unlimited': '제한 없음', 'score_wait': '{score}점 도달, 이번 라운드 종료 대기 중', 'invalid': '라운드 수와 지정 중지 점수는 1–999이며 단축키가 유효해야 합니다.'})
 TEXT['id'].update({'score_limit': 'Batas skor', 'unlimited': 'Tanpa batas', 'score_wait': 'Mencapai {score}, menunggu ronde berakhir', 'invalid': 'Gunakan 1–999 ronde, batas skor khusus 1–999, dan tombol pintasan yang valid.'})
 
-def text(language, key, **values):
-    return TEXT.get(language, TEXT['en']).get(key, TEXT['en'].get(key, key)).format(**values)
+def text(language, message_key, **values):
+    fallback = TEXT['en'].get(message_key, message_key)
+    return TEXT.get(language, TEXT['en']).get(message_key, fallback).format(**values)

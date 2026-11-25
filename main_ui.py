@@ -100,8 +100,8 @@ class JumpRopeApp:
     def px(self, value):
         return round(value*self.scale)
 
-    def tr(self, key, **values):
-        return text(LANGUAGES[self.language.get()], key, **values)
+    def tr(self, message_key, **values):
+        return text(LANGUAGES[self.language.get()], message_key, **values)
 
     def reason(self, value):
         return self.tr('reason_'+value)
