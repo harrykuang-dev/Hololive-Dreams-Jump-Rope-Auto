@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> Program ini telah digabungkan ke dalam [Holodori-Auto](https://github.com/harrykuang-dev/Holodori-Auto). Pemeliharaan dan pembaruan proyek mandiri ini telah dihentikan.
+
 # Hololive Dreams Auto Jump Rope
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Indonesian](README.id.md) · [简体中文](README.zh-CN.md)
